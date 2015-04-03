@@ -1,0 +1,2 @@
+SBlueprintActionMenu
+Default action menu for creation of blueprint modules.
