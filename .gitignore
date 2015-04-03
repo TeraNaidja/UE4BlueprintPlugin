@@ -7,6 +7,11 @@
 *.userosscache
 *.sln.docstates
 
+#UE4 Ignore 
+Intermediate/
+Saved/
+Binaries/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -59,6 +64,7 @@ dlldata.c
 *.pidb
 *.svclog
 *.scc
+*.sln
 
 # Chutzpah Test files
 _Chutzpah*
