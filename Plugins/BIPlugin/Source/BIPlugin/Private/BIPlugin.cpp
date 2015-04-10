@@ -1,32 +1,23 @@
 #include "BIPluginPrivatePCH.h"
 
 #include "BIPlugin.h"
-
-namespace
-{
-	void TestFunction()
-	{
-		UE_LOG(LogTemp, Warning, TEXT("This is a test debug Command"));
-
-		for (TObjectIterator<UBlueprint> blueprintIt; blueprintIt; ++blueprintIt)
-		{
-			UBlueprint* blueprint = *blueprintIt;
-			
-			UE_LOG(LogTemp, Warning, TEXT("Friendly Name: %s"), *blueprint->GetFriendlyName());
-		}
-	} 
-}
-
-IConsoleCommand* TestFunctionConsoleCmd;
+#include "FBlueprintSuggestionProviderManager.h"
+#include "SuggestionProvider.h"
+#include "ISuggestionDatabase.h"
+#include "SuggestionDatabaseTrie.h"
 
 void BIPluginImpl::StartupModule()
 {
 	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Startup"));
 
-	TestFunctionConsoleCmd = IConsoleManager::Get().RegisterConsoleCommand(
-		TEXT("BIPlugin_Test"),
-		TEXT("Test Commands yo"),
-		FConsoleCommandDelegate::CreateStatic(TestFunction),
+	m_SuggestionDatabase = TSharedPtr<ISuggestionDatabase>(new SuggestionDatabaseTrie());
+	m_SuggestionProvider = TSharedPtr<IBlueprintSuggestionProvider>(new SuggestionProvider());
+	FBlueprintSuggestionProviderManager::Get().RegisterBlueprintSuggestionProvider(m_SuggestionProvider);
+
+	m_RebuildCacheCommand = IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("BIPlugin_RebuildSuggestionCache"),
+		TEXT("Flushes and Rebuilds blueprint suggestion bache based on all available blueprints in current project."),
+		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase),
 		ECVF_Default
 		);
 }
@@ -34,7 +25,21 @@ void BIPluginImpl::StartupModule()
 void BIPluginImpl::ShutdownModule()
 {
 	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Shutdown"));
-	IConsoleManager::Get().UnregisterConsoleObject(TestFunctionConsoleCmd);
+	IConsoleManager::Get().UnregisterConsoleObject(m_RebuildCacheCommand);
+	FBlueprintSuggestionProviderManager::Get().DeregisterBlueprintSuggestionProvider(m_SuggestionProvider);
+	m_SuggestionProvider.Reset();
+	m_SuggestionDatabase.Reset();
+}
+
+void BIPluginImpl::OnRebuildDatabase()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Rebuilding suggestion database using available blueprints."));
+
+	for (TObjectIterator<UBlueprint> BlueprintIt; BlueprintIt; ++BlueprintIt)
+	{
+		UBlueprint* Blueprint = *BlueprintIt;
+		m_SuggestionDatabase->ParseBlueprint(*Blueprint);
+	}
 }
 
 IMPLEMENT_MODULE(BIPluginImpl, Module)

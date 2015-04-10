@@ -17,14 +17,15 @@ public class BIPlugin : ModuleRules
 				"BIPlugin/Public" 
 			});
 
-		PublicDependencyModuleNames.AddRange(
+		PrivateDependencyModuleNames.AddRange(
 			new string[] 
 		{ 
 			"Core",
 			"CoreUObject",
 			"Engine", 
 			"GraphEditor",
-			"BlueprintGraph"
+			"BlueprintGraph",
+			"Kismet",
 		});
 	}
 }
