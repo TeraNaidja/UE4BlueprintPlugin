@@ -1,6 +1,8 @@
 #include "BIPluginPrivatePCH.h"
 #include "SuggestionProvider.h"
 
+#include "ISuggestionDatabase.h"
+
 namespace
 {
 	void BacktrackNodeRecursive(UK2Node* a_Node, EEdGraphPinDirection a_ExploreDirection, FString& out_Result)
@@ -50,7 +52,8 @@ namespace
 	}
 }
 
-SuggestionProvider::SuggestionProvider()
+SuggestionProvider::SuggestionProvider(const ISuggestionDatabase& a_Database)
+	: m_SuggestionDatabase(a_Database)
 {
 }
 
@@ -60,7 +63,18 @@ SuggestionProvider::~SuggestionProvider()
 
 void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& InContext, TArray<TSharedPtr<FBlueprintSuggestion>>& OutEntries)
 {
-	OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(InContext.Blueprints[0]->GetName() + " >> " +
+	const int32 NUM_SUGGESTIONS = 5;
+
+	TArray<ISuggestionDatabase::Suggestion> suggestions;
+	suggestions.Reserve(NUM_SUGGESTIONS);
+	m_SuggestionDatabase.ProvideSuggestions(InContext, NUM_SUGGESTIONS, suggestions);
+
+	for (ISuggestionDatabase::Suggestion suggested : suggestions)
+	{
+		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.m_NodeSignature)));
+	}
+
+	/*OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(InContext.Blueprints[0]->GetName() + " >> " +
 		InContext.Graphs[0]->GetName())));
 
 	for (auto pinParentCombo : InContext.Pins)
@@ -68,5 +82,5 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 		FString backtrackPath = GetBacktrackPath(pinParentCombo.OwnerNode, pinParentCombo.Pin->Direction);
 
 		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(FString("Path: ") + backtrackPath)));
-	}
+	}*/
 }

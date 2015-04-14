@@ -4,14 +4,14 @@
 #include "FBlueprintSuggestionProviderManager.h"
 #include "SuggestionProvider.h"
 #include "ISuggestionDatabase.h"
-#include "SuggestionDatabaseTrie.h"
+#include "SuggestionDatabasePath.h"
 
 void BIPluginImpl::StartupModule()
 {
 	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Startup"));
 
-	m_SuggestionDatabase = TSharedPtr<ISuggestionDatabase>(new SuggestionDatabaseTrie());
-	m_SuggestionProvider = TSharedPtr<IBlueprintSuggestionProvider>(new SuggestionProvider());
+	m_SuggestionDatabase = TUniquePtr<ISuggestionDatabase>(new SuggestionDatabasePath());
+	m_SuggestionProvider = TSharedPtr<IBlueprintSuggestionProvider>(new SuggestionProvider(*m_SuggestionDatabase));
 	FBlueprintSuggestionProviderManager::Get().RegisterBlueprintSuggestionProvider(m_SuggestionProvider);
 
 	m_RebuildCacheCommand = IConsoleManager::Get().RegisterConsoleCommand(

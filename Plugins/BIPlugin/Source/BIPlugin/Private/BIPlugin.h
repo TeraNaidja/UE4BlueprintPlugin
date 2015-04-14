@@ -14,6 +14,6 @@ public:
 
 private:
 	TSharedPtr<IBlueprintSuggestionProvider> m_SuggestionProvider;
-	TSharedPtr<ISuggestionDatabase> m_SuggestionDatabase;
+	TUniquePtr<ISuggestionDatabase> m_SuggestionDatabase;
 	IConsoleCommand* m_RebuildCacheCommand;
 };
