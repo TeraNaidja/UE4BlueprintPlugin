@@ -1,8 +1,12 @@
 #include "BIPluginPrivatePCH.h"
 #include "PathPredictionEntry.h"
 
-PathPredictionEntry::PathPredictionEntry() :
-m_NumUses(0)
+PathPredictionEntry::PathPredictionEntry()
+	: m_NumUses(0)
+{
+}
+
+PathPredictionEntry::~PathPredictionEntry()
 {
 }
 

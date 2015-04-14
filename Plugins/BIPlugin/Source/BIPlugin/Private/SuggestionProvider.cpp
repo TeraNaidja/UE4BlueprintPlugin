@@ -2,6 +2,7 @@
 #include "SuggestionProvider.h"
 
 #include "ISuggestionDatabase.h"
+#include "Suggestion.h"
 
 namespace
 {
@@ -65,13 +66,13 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 {
 	const int32 NUM_SUGGESTIONS = 5;
 
-	TArray<ISuggestionDatabase::Suggestion> suggestions;
+	TArray<Suggestion> suggestions;
 	suggestions.Reserve(NUM_SUGGESTIONS);
 	m_SuggestionDatabase.ProvideSuggestions(InContext, NUM_SUGGESTIONS, suggestions);
 
-	for (ISuggestionDatabase::Suggestion suggested : suggestions)
+	for (Suggestion suggested : suggestions)
 	{
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.m_NodeSignature)));
+		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature())));
 	}
 
 	/*OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(InContext.Blueprints[0]->GetName() + " >> " +
