@@ -47,7 +47,7 @@ namespace
 			for (UK2Node* child : children)
 			{
 				PathPredictionEntry thisPath = PathPredictionEntry(a_ParentPath);
-				thisPath.m_ContextPath.Push(PathNodeEntry(child->GetSignature().ToString()));
+				thisPath.m_ContextPath.PushNode(PathNodeEntry(child->GetSignature().ToString()));
 				a_Results.Push(thisPath);
 				FindPathForNodeRecursive(*child, a_ExploreDirection, thisPath, a_Results, a_Depth + 1);
 			}
@@ -73,7 +73,7 @@ namespace
 	}
 
 	void FindAllContextPathsRecursive(const UK2Node& a_Node, EPathDirection a_ExploreDirection, int32 a_Depth, 
-		TArray<PathNodeEntry>& a_CurrentPath, TArray<TArray<PathNodeEntry>>& a_Results)
+		PathContextPath& a_CurrentPath, TArray<PathContextPath>& a_Results)
 	{
 		if (a_Depth < MAX_CONTEXT_PATH_LENGTH)
 		{
@@ -82,8 +82,8 @@ namespace
 			{
 				for (UK2Node* child : children)
 				{
-					TArray<PathNodeEntry> childPath = TArray<PathNodeEntry>(a_CurrentPath);
-					childPath.Push(PathNodeEntry(*child));
+					PathContextPath childPath = PathContextPath(a_CurrentPath);
+					childPath.PushNode(PathNodeEntry(*child));
 					FindAllContextPathsRecursive(*child, a_ExploreDirection, a_Depth + 1, childPath, a_Results);
 				}
 			}
@@ -98,13 +98,48 @@ namespace
 		}
 	}
 
-	TArray<TArray<PathNodeEntry>> FindAllContextPaths(const UK2Node& a_Node, EPathDirection a_ExploreDirection)
+	TArray<PathContextPath> FindAllContextPaths(const UK2Node& a_Node, EPathDirection a_ExploreDirection)
 	{
-		TArray<TArray<PathNodeEntry>> result;
-		TArray<PathNodeEntry> initialPath;
+		TArray<PathContextPath> result;
+		PathContextPath initialPath;
 		FindAllContextPathsRecursive(a_Node, a_ExploreDirection, 0, initialPath, result);		
-
 		return result;
+	}
+
+	void FilterSuggestionsUsingContextPaths(const TArray<PathPredictionEntry>& a_AvailableSuggestionPaths, const TArray<PathContextPath>& a_AvailableContextPaths, TArray<Suggestion>& a_Output)
+	{
+		for (const PathPredictionEntry& entry : a_AvailableSuggestionPaths)
+		{
+			for (const PathContextPath& context : a_AvailableContextPaths)
+			{
+				float contextSimilarity = context.CompareContext(entry.m_ContextPath);
+				
+				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity);
+				a_Output.Push(suggest);
+			}
+		}
+	}
+
+	void CombineSuggestions(TArray<Suggestion>& a_InOutSuggestions)
+	{
+		TArray<Suggestion> collapsedSuggestions;
+		for (Suggestion suggested : a_InOutSuggestions)
+		{
+			Suggestion* containedSuggestion = collapsedSuggestions.FindByPredicate([&](const Suggestion& a_Suggestion) {
+				return a_Suggestion.GetNodeSignature() == suggested.GetNodeSignature();
+			}); 
+			if (containedSuggestion != nullptr)
+			{
+				//Combine scores or pick max? For now we will just go with the max approach.
+				containedSuggestion->SetSuggestionScore(FMath::Max(suggested.GetSuggestionScore(), containedSuggestion->GetSuggestionScore()));
+			}
+			else
+			{
+				collapsedSuggestions.Add(suggested);
+			}
+		}
+
+		a_InOutSuggestions = collapsedSuggestions;
 	}
 }
 
@@ -163,31 +198,24 @@ void SuggestionDatabasePath::FlushDatabase()
 	m_BackwardPredictionDatabase.Empty();
 }
 
-void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, const TArray<Suggestion>& a_Output) const
+void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) const
 {
 	verify(a_Context.Pins.Num() == 1); //We assume that we are only dealing with one connected pin now.
 	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? EPathDirection::Backward : EPathDirection::Forward;
 	const UK2Node& ownerNode = *a_Context.Pins[0].OwnerNode;
 	NodeIndexType nodeIndex = NodeIndexType(ownerNode.GetSignature().ToString());
 
-	TArray<TArray<PathNodeEntry>> availableContextPaths = FindAllContextPaths(ownerNode, direction);
-	//Todo: Filter out and collapse results based on context.
+	//TODO: BlueprintGraph.K2Node_VariableGet::GetSignature() Fix to differentiate between fields? 
+	TArray<PathContextPath> availableContextPaths = FindAllContextPaths(ownerNode, direction);
 
 	PredictionDatabase db = (direction == EPathDirection::Forward) ? m_ForwardPredictionDatabase : m_BackwardPredictionDatabase;
 
 	const TArray<PathPredictionEntry>* suggestionPaths = db.Find(nodeIndex);
 	if (suggestionPaths != nullptr)
-	{
-		for (PathPredictionEntry entry : *suggestionPaths)
-		{
-			FString path;
-			for (PathNodeEntry nodeEntry : entry.m_ContextPath)
-			{
-				path.Append(nodeEntry.m_NodeSignature);
-			}
-			UE_LOG(LogTemp, Warning, TEXT("Prediction: %s Anchor: %s Path: %s"), *entry.m_PredictionVertex.m_NodeSignature,
-				*entry.m_AnchorVertex.m_NodeSignature, *path);
-		}
+	{ 
+		FilterSuggestionsUsingContextPaths(*suggestionPaths, availableContextPaths, a_Output);
+		CombineSuggestions(a_Output);
+		//TODO: Collapse Suggestions
 	}
 }
 

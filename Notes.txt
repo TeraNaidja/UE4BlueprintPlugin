@@ -6,3 +6,6 @@ Contains static helpers for analytics.
 
 SGraphActionMenu
 Provides layout and filters content for graph menu. SubWidget of SBlueprintActionMenu
+
+Todo; 
+Add pin value type dependency on suggestions
