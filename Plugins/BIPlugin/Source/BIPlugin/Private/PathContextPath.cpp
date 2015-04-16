@@ -45,7 +45,7 @@ FString PathContextPath::GetPathString() const
 	FString path;
 	for (PathNodeEntry nodeEntry : m_ContextPath)
 	{
-		path.Append(nodeEntry.m_NodeSignature);
+		path.Append(nodeEntry.m_NodeSignature.ToString());
 	}
 	return path;
 }

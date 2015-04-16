@@ -47,7 +47,7 @@ namespace
 			for (UK2Node* child : children)
 			{
 				PathPredictionEntry thisPath = PathPredictionEntry(a_ParentPath);
-				thisPath.m_ContextPath.PushNode(PathNodeEntry(child->GetSignature().ToString()));
+				thisPath.m_ContextPath.PushNode(PathNodeEntry(*child));
 				a_Results.Push(thisPath);
 				FindPathForNodeRecursive(*child, a_ExploreDirection, thisPath, a_Results, a_Depth + 1);
 			}
@@ -59,12 +59,12 @@ namespace
 		TArray<PathPredictionEntry> result;
 		PathPredictionEntry initialNode;
 		initialNode.m_Direction = a_ExploreDirection;
-		initialNode.m_PredictionVertex = PathNodeEntry(a_Node.GetSignature().ToString());
+		initialNode.m_PredictionVertex = PathNodeEntry(a_Node);
 
 		for (const auto node : FindNodesInDirection(a_Node, a_ExploreDirection))
 		{
 			PathPredictionEntry pathEntry = PathPredictionEntry(initialNode);
-			pathEntry.m_AnchorVertex = PathNodeEntry(node->GetSignature().ToString());
+			pathEntry.m_AnchorVertex = PathNodeEntry(*node);
 			result.Push(pathEntry);
 			FindPathForNodeRecursive(*node, a_ExploreDirection, pathEntry, result, 0);
 		}
@@ -114,7 +114,7 @@ namespace
 			{
 				float contextSimilarity = context.CompareContext(entry.m_ContextPath);
 				
-				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity);
+				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, entry.m_PredictionVertex.m_NodeTitle, contextSimilarity);
 				a_Output.Push(suggest);
 			}
 		}
@@ -126,7 +126,7 @@ namespace
 		for (Suggestion suggested : a_InOutSuggestions)
 		{
 			Suggestion* containedSuggestion = collapsedSuggestions.FindByPredicate([&](const Suggestion& a_Suggestion) {
-				return a_Suggestion.GetNodeSignature() == suggested.GetNodeSignature();
+				return a_Suggestion.CompareSignatures(suggested);
 			}); 
 			if (containedSuggestion != nullptr)
 			{
@@ -148,13 +148,13 @@ SuggestionDatabasePath::NodeIndexType::NodeIndexType() :
 {
 }
 
-SuggestionDatabasePath::NodeIndexType::NodeIndexType(const FString& a_NodeSignature) :
-	m_NodeSignature(a_NodeSignature)
+SuggestionDatabasePath::NodeIndexType::NodeIndexType(const UK2Node& a_Node) :
+	m_NodeSignature(a_Node.GetSignature().ToString())
 {
 }
 
 SuggestionDatabasePath::NodeIndexType::NodeIndexType(const PathNodeEntry& a_NodeEntry) :
-	m_NodeSignature(a_NodeEntry.m_NodeSignature)
+	m_NodeSignature(a_NodeEntry.m_NodeSignature.ToString())
 {
 }
 
@@ -203,7 +203,7 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	verify(a_Context.Pins.Num() == 1); //We assume that we are only dealing with one connected pin now.
 	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? EPathDirection::Backward : EPathDirection::Forward;
 	const UK2Node& ownerNode = *a_Context.Pins[0].OwnerNode;
-	NodeIndexType nodeIndex = NodeIndexType(ownerNode.GetSignature().ToString());
+	NodeIndexType nodeIndex = NodeIndexType(ownerNode);
 
 	//TODO: BlueprintGraph.K2Node_VariableGet::GetSignature() Fix to differentiate between fields? 
 	TArray<PathContextPath> availableContextPaths = FindAllContextPaths(ownerNode, direction);

@@ -3,14 +3,18 @@
 class Suggestion
 {
 public:
-	Suggestion(const FString& a_NodeSignature, float a_Score);
+	Suggestion(const FBlueprintNodeSignature& a_NodeSignature, const FText& a_NodeTitle, float a_Score);
 	~Suggestion();
 
-	const FString& GetNodeSignature() const;
+	bool CompareSignatures(const Suggestion& a_Other) const;
+
+	const FBlueprintNodeSignature& GetNodeSignature() const;
+	const FText& GetNodeTitle() const;
 	float GetSuggestionScore() const;
 
 	void SetSuggestionScore(float a_Score);
 private:
-	FString m_NodeSignature;
+	FBlueprintNodeSignature m_NodeSignature;
+	FText m_NodeTitle;
 	float m_SuggestionScore;
 };

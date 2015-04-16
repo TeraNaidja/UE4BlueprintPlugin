@@ -72,16 +72,6 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 
 	for (Suggestion suggested : suggestions)
 	{
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature())));
+		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature(), suggested.GetNodeTitle())));
 	}
-
-	/*OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(InContext.Blueprints[0]->GetName() + " >> " +
-		InContext.Graphs[0]->GetName())));
-
-	for (auto pinParentCombo : InContext.Pins)
-	{
-		FString backtrackPath = GetBacktrackPath(pinParentCombo.OwnerNode, pinParentCombo.Pin->Direction);
-
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(FString("Path: ") + backtrackPath)));
-	}*/
 }

@@ -20,6 +20,8 @@ void BIPluginImpl::StartupModule()
 		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase),
 		ECVF_Default
 		);
+
+	OnRebuildDatabase();
 }
 
 void BIPluginImpl::ShutdownModule()

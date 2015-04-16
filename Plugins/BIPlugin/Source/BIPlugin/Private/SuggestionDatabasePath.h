@@ -12,7 +12,7 @@ public:
 	{
 	public:
 		NodeIndexType();
-		NodeIndexType(const FString& a_NodeSignature);
+		NodeIndexType(const UK2Node& a_Node);
 		NodeIndexType(const PathNodeEntry& a_NodeEntry);
 		bool operator ==(const NodeIndexType& a_Other) const;
 		friend uint32 GetTypeHash(const NodeIndexType& a_Instance);
