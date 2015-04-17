@@ -3,15 +3,17 @@
 #include "BIPlugin.h"
 #include "FBlueprintSuggestionProviderManager.h"
 #include "SuggestionProvider.h"
-#include "ISuggestionDatabase.h"
+#include "SuggestionDatabaseBase.h"
 #include "SuggestionDatabasePath.h"
+#include "GraphNodeInformationDatabase.h"
 
 void BIPluginImpl::StartupModule()
 {
 	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Startup"));
 
-	m_SuggestionDatabase = TUniquePtr<ISuggestionDatabase>(new SuggestionDatabasePath());
-	m_SuggestionProvider = TSharedPtr<IBlueprintSuggestionProvider>(new SuggestionProvider(*m_SuggestionDatabase));
+	m_NodeInformationDatabase = nullptr;
+	m_SuggestionDatabase = new SuggestionDatabasePath();
+	m_SuggestionProvider = TSharedPtr<SuggestionProvider>(new SuggestionProvider(*m_SuggestionDatabase));
 	FBlueprintSuggestionProviderManager::Get().RegisterBlueprintSuggestionProvider(m_SuggestionProvider);
 
 	m_RebuildCacheCommand = IConsoleManager::Get().RegisterConsoleCommand(
@@ -21,7 +23,6 @@ void BIPluginImpl::StartupModule()
 		ECVF_Default
 		);
 
-	OnRebuildDatabase();
 }
 
 void BIPluginImpl::ShutdownModule()
@@ -30,7 +31,17 @@ void BIPluginImpl::ShutdownModule()
 	IConsoleManager::Get().UnregisterConsoleObject(m_RebuildCacheCommand);
 	FBlueprintSuggestionProviderManager::Get().DeregisterBlueprintSuggestionProvider(m_SuggestionProvider);
 	m_SuggestionProvider.Reset();
-	m_SuggestionDatabase.Reset();
+	delete m_SuggestionDatabase;
+	delete m_NodeInformationDatabase;
+}
+
+void BIPluginImpl::PostLoadCallback()
+{
+	//Initialization of the node information database is delayed as the FBlueprintActionDatabase does not exist at StartupModule().
+	m_NodeInformationDatabase = new GraphNodeInformationDatabase();
+	m_SuggestionDatabase->SetGraphNodeDatabase(m_NodeInformationDatabase);
+
+	OnRebuildDatabase();
 }
 
 void BIPluginImpl::OnRebuildDatabase()

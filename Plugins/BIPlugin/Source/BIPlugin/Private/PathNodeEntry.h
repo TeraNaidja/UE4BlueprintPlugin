@@ -9,5 +9,6 @@ public:
 	friend uint32 GetTypeHash(const PathNodeEntry& a_Instance);
 
 	FBlueprintNodeSignature m_NodeSignature;
+	FGuid m_NodeSignatureGuid;
 	FText m_NodeTitle;
 };

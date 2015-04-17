@@ -2,6 +2,8 @@
 #include "SuggestionDatabasePath.h"
 
 #include "FBlueprintSuggestionProviderManager.h"
+#include "GraphNodeInformationDatabase.h"
+#include "GraphNodeInformation.h"
 
 namespace
 {
@@ -114,7 +116,7 @@ namespace
 			{
 				float contextSimilarity = context.CompareContext(entry.m_ContextPath);
 				
-				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, entry.m_PredictionVertex.m_NodeTitle, contextSimilarity);
+				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity);
 				a_Output.Push(suggest);
 			}
 		}
@@ -140,6 +142,32 @@ namespace
 		}
 
 		a_InOutSuggestions = collapsedSuggestions;
+	}
+
+	TArray<PathPredictionEntry> RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(const TArray<PathPredictionEntry>& a_AvailableSuggestions, const UEdGraphPin& a_ConnectingPin, const GraphNodeInformationDatabase& a_NodeInfoDatabase)
+	{
+		TArray<PathPredictionEntry> result;
+		result.Reserve(a_AvailableSuggestions.Num());
+
+		for (PathPredictionEntry entry : a_AvailableSuggestions)
+		{
+			const GraphNodeInformation* suggestionNodeInfo = a_NodeInfoDatabase.FindNodeInformation(entry.m_PredictionVertex.m_NodeSignatureGuid);
+			//PHILTODO: This looks weird. We could not retrieve information about the suggested node. 
+			if (suggestionNodeInfo != nullptr)
+			{
+				EEdGraphPinDirection otherPinDirection = UEdGraphPin::GetComplementaryDirection(a_ConnectingPin.Direction);
+				if (suggestionNodeInfo->HasPinTypeInDirection(a_ConnectingPin.PinType, otherPinDirection))
+				{
+					result.Push(entry);
+				}
+			}
+			else
+			{
+				UE_LOG(LogTemp, Log, TEXT("Got no information about suggested node %s"), *(entry.m_PredictionVertex.m_NodeTitle.ToString()));
+			}
+		}
+
+		return result;
 	}
 }
 
@@ -179,11 +207,6 @@ SuggestionDatabasePath::~SuggestionDatabasePath()
 
 void SuggestionDatabasePath::ParseBlueprint(const UBlueprint& a_Blueprint)
 {
-	FString name;
-	a_Blueprint.GetName(name);
-	if (name != "PuzzleBlockGrid")
-		return;
-
 	TArray<UEdGraph*> graphsInBlueprint;
 	a_Blueprint.GetAllGraphs(graphsInBlueprint);
 	for (auto graph : graphsInBlueprint)
@@ -213,9 +236,12 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	const TArray<PathPredictionEntry>* suggestionPaths = db.Find(nodeIndex);
 	if (suggestionPaths != nullptr)
 	{ 
-		FilterSuggestionsUsingContextPaths(*suggestionPaths, availableContextPaths, a_Output);
+		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase());
+		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output);
 		CombineSuggestions(a_Output);
-		//TODO: Collapse Suggestions
+		//TODO: Implement suggestion count constraint. Do we do this here or are we implementing this on the menu side? 
+		// Implementing it on the menu side would allow us to show the top n suggestions in-menu while the remainder 
+		// is stuffed in a category? 
 	}
 }
 

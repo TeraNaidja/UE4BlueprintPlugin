@@ -1,9 +1,9 @@
 #include "BIPluginPrivatePCH.h"
 #include "Suggestion.h"
 
-Suggestion::Suggestion(const FBlueprintNodeSignature &a_NodeSignature, const FText& a_NodeTitle, float a_Score)
+Suggestion::Suggestion(const FBlueprintNodeSignature &a_NodeSignature, float a_Score)
 	: m_NodeSignature(a_NodeSignature)
-	, m_NodeTitle(a_NodeTitle)
+	, m_NodeSignatureGuid(a_NodeSignature.AsGuid())
 	, m_SuggestionScore(a_Score)
 {
 }
@@ -14,7 +14,7 @@ Suggestion::~Suggestion()
 
 bool Suggestion::CompareSignatures(const Suggestion& a_Other) const
 {
-	return a_Other.m_NodeSignature.ToString() == m_NodeSignature.ToString();
+	return a_Other.m_NodeSignatureGuid == m_NodeSignatureGuid;
 }
 
 const FBlueprintNodeSignature& Suggestion::GetNodeSignature() const
@@ -22,9 +22,9 @@ const FBlueprintNodeSignature& Suggestion::GetNodeSignature() const
 	return m_NodeSignature;
 }
 
-const FText& Suggestion::GetNodeTitle() const
+const FGuid& Suggestion::GetNodeSignatureGuid() const
 {
-	return m_NodeTitle;
+	return m_NodeSignatureGuid;
 }
 
 float Suggestion::GetSuggestionScore() const

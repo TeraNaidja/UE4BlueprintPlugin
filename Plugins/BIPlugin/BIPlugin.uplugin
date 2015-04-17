@@ -14,7 +14,7 @@
     [
         {
             "Name" : "BIPlugin",
-            "Type" : "Editor"
+			"Type": "Editor"
         } 
     ]
 }

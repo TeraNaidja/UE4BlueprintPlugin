@@ -2,18 +2,23 @@
 
 #include "ModuleManager.h"
 
+class GraphNodeInformationDatabase;
 class IBlueprintSuggestionProvider;
-class ISuggestionDatabase;
+class SuggestionDatabaseBase;
 class BIPluginImpl : public IModuleInterface
 {
 public:
-	void StartupModule();
-	void ShutdownModule();
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
+
+	virtual void PostLoadCallback() override;
 
 	void OnRebuildDatabase();
 
 private:
 	TSharedPtr<IBlueprintSuggestionProvider> m_SuggestionProvider;
-	TUniquePtr<ISuggestionDatabase> m_SuggestionDatabase;
+	SuggestionDatabaseBase* m_SuggestionDatabase;
+	GraphNodeInformationDatabase* m_NodeInformationDatabase;
+
 	IConsoleCommand* m_RebuildCacheCommand;
 };

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "ISuggestionDatabase.h"
+#include "SuggestionDatabaseBase.h"
 #include "EPathDirection.h"
 #include "PathNodeEntry.h"
 #include "PathPredictionEntry.h"
 
-class SuggestionDatabasePath: public ISuggestionDatabase
+class SuggestionDatabasePath: public SuggestionDatabaseBase
 {
 public:
 	class NodeIndexType

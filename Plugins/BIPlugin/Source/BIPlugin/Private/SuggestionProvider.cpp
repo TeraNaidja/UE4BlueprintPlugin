@@ -1,7 +1,7 @@
 #include "BIPluginPrivatePCH.h"
 #include "SuggestionProvider.h"
 
-#include "ISuggestionDatabase.h"
+#include "SuggestionDatabaseBase.h"
 #include "Suggestion.h"
 
 namespace
@@ -53,7 +53,7 @@ namespace
 	}
 }
 
-SuggestionProvider::SuggestionProvider(const ISuggestionDatabase& a_Database)
+SuggestionProvider::SuggestionProvider(const SuggestionDatabaseBase& a_Database)
 	: m_SuggestionDatabase(a_Database)
 {
 }
@@ -72,6 +72,6 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 
 	for (Suggestion suggested : suggestions)
 	{
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature(), suggested.GetNodeTitle())));
+		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature(), suggested.GetNodeSignatureGuid())));
 	}
 }
