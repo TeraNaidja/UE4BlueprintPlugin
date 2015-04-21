@@ -15,7 +15,7 @@ PathNodeEntry::PathNodeEntry(const UK2Node& a_Node)
 
 bool PathNodeEntry::operator ==(const PathNodeEntry& a_Other) const
 {
-	return m_NodeSignatureGuid == m_NodeSignatureGuid;
+	return m_NodeSignatureGuid == a_Other.m_NodeSignatureGuid;
 }
 
 uint32 GetTypeHash(const PathNodeEntry& a_Instance)

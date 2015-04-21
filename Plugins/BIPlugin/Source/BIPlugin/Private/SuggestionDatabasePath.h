@@ -25,9 +25,13 @@ public:
 	SuggestionDatabasePath();
 	~SuggestionDatabasePath();
 
-	virtual void ParseBlueprint(const UBlueprint& a_Blueprint) override;
 	virtual void FlushDatabase() override;
 	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) const override;
+	virtual bool HasSuggestions() const override;
+
+protected:
+	virtual void ParseBlueprint(const UBlueprint& a_Blueprint) override;
+
 private:
 	void ParseGraph(const UBlueprint& a_Blueprint, const UEdGraph& a_Graph);
 	void ParseNode(const UK2Node& a_Node, EPathDirection a_Direction);

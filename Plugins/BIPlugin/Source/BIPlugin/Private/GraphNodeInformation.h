@@ -5,7 +5,7 @@
 class GraphNodeInformation
 {
 public:
-	GraphNodeInformation(const UK2Node& a_Node);
+	GraphNodeInformation(UK2Node& a_Node);
 	~GraphNodeInformation();
 
 	const TArray<FEdGraphPinType>& GetInputPins() const;

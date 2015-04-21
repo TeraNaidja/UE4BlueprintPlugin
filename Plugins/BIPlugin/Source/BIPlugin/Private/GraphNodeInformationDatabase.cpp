@@ -5,7 +5,6 @@
 
 GraphNodeInformationDatabase::GraphNodeInformationDatabase()
 {
-	FillDatabase();
 }
 
 GraphNodeInformationDatabase::~GraphNodeInformationDatabase()

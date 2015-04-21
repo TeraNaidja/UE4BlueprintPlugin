@@ -4,6 +4,7 @@
 PathContextPath::PathContextPath()
 	: m_ContextPath()
 {
+	m_ContextPath.Reserve(MAX_CONTEXT_PATH_LENGTH);
 }
 
 PathContextPath::PathContextPath(const PathContextPath& a_Other)
@@ -28,7 +29,8 @@ void PathContextPath::PushNode(const PathNodeEntry& a_Node)
 float PathContextPath::CompareContext(const PathContextPath& a_Other) const
 {
 	int32 matchingNodes = 0;
-	int32 compareLength = FMath::Min(m_ContextPath.Num(), a_Other.m_ContextPath.Num());
+	int32 thisContextLength = m_ContextPath.Num();
+	int32 compareLength = FMath::Min(thisContextLength, a_Other.m_ContextPath.Num());
 	for (int32 i = 0; i < compareLength; ++i)
 	{
 		if (m_ContextPath[i] == a_Other.m_ContextPath[i])
@@ -37,7 +39,12 @@ float PathContextPath::CompareContext(const PathContextPath& a_Other) const
 		}
 	}
 
-	return (float)matchingNodes / (float)compareLength;
+	float result = 0.0f;
+	if (thisContextLength > 0)
+	{
+		result = (float)matchingNodes / (float)thisContextLength;
+	}
+	return result;
 }
 
 FString PathContextPath::GetPathString() const

@@ -3,6 +3,8 @@
 
 #include "SuggestionDatabaseBase.h"
 #include "Suggestion.h"
+#include "BlueprintSuggestion.h"
+#include "SuggestionDatabaseBase.h"
 
 namespace
 {
@@ -53,8 +55,9 @@ namespace
 	}
 }
 
-SuggestionProvider::SuggestionProvider(const SuggestionDatabaseBase& a_Database)
+SuggestionProvider::SuggestionProvider(const SuggestionDatabaseBase& a_Database, const RebuildDatabaseDelegate& a_RebuildDatabaseDelegate)
 	: m_SuggestionDatabase(a_Database)
+	, m_RebuildDatabaseDelegate(a_RebuildDatabaseDelegate)
 {
 }
 
@@ -68,10 +71,22 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 
 	TArray<Suggestion> suggestions;
 	suggestions.Reserve(NUM_SUGGESTIONS);
+	if (!m_SuggestionDatabase.HasSuggestions())
+	{
+		m_RebuildDatabaseDelegate.Execute();
+	}
+
 	m_SuggestionDatabase.ProvideSuggestions(InContext, NUM_SUGGESTIONS, suggestions);
 
+	int32 suggestionId = 1;
 	for (Suggestion suggested : suggestions)
 	{
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(suggested.GetNodeSignature(), suggested.GetNodeSignatureGuid())));
+		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(
+			suggested.GetNodeSignature(), 
+			suggested.GetNodeSignatureGuid(), 
+			suggestionId, 
+			suggested.GetSuggestionContextScore(), 
+			suggested.GetSuggestionUsesScore())));
+		++suggestionId;
 	}
 }

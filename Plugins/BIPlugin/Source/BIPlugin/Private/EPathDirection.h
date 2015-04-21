@@ -2,6 +2,6 @@
 
 enum class EPathDirection
 {
-	Forward, //Input -> Output 
-	Backward //Output -> Input
+	Forward, //Output -> Input
+	Backward //Input -> Output
 };

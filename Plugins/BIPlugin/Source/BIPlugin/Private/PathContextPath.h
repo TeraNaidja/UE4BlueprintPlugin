@@ -2,9 +2,12 @@
 
 #include "PathNodeEntry.h"
 
+
 class PathContextPath
 {
 public:
+	static const int MAX_CONTEXT_PATH_LENGTH = 3;
+
 	PathContextPath();
 	PathContextPath(const PathContextPath& a_Other);
 	~PathContextPath();

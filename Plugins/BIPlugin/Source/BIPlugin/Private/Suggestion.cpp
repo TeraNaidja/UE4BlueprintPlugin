@@ -1,10 +1,15 @@
 #include "BIPluginPrivatePCH.h"
 #include "Suggestion.h"
 
-Suggestion::Suggestion(const FBlueprintNodeSignature &a_NodeSignature, float a_Score)
+Suggestion::Suggestion()
+{
+}
+
+Suggestion::Suggestion(const FBlueprintNodeSignature &a_NodeSignature, float a_ContextScore, int32 a_UsesScore)
 	: m_NodeSignature(a_NodeSignature)
 	, m_NodeSignatureGuid(a_NodeSignature.AsGuid())
-	, m_SuggestionScore(a_Score)
+	, m_SuggestionScoreContext(a_ContextScore)
+	, m_SuggestionScoreUses(a_UsesScore)
 {
 }
 
@@ -27,12 +32,22 @@ const FGuid& Suggestion::GetNodeSignatureGuid() const
 	return m_NodeSignatureGuid;
 }
 
-float Suggestion::GetSuggestionScore() const
+float Suggestion::GetSuggestionContextScore() const
 {
-	return m_SuggestionScore;
+	return m_SuggestionScoreContext;
 }
 
-void Suggestion::SetSuggestionScore(float a_Score)
+int32 Suggestion::GetSuggestionUsesScore() const
 {
-	m_SuggestionScore = a_Score;
+	return m_SuggestionScoreUses;
+}
+
+void Suggestion::SetSuggestionContextScore(float a_ContextScore)
+{
+	m_SuggestionScoreContext = a_ContextScore;
+}
+
+void Suggestion::SetSuggestionUsesScore(int32 a_UsesScore)
+{
+	m_SuggestionScoreUses = a_UsesScore;
 }

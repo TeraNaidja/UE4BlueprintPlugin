@@ -1,7 +1,8 @@
 #include "BIPluginPrivatePCH.h"
 #include "SuggestionDatabasePath.h"
 
-#include "FBlueprintSuggestionProviderManager.h"
+#include "BlueprintSuggestion.h"
+#include "BlueprintSuggestionContext.h"
 #include "GraphNodeInformationDatabase.h"
 #include "GraphNodeInformation.h"
 
@@ -39,11 +40,9 @@ namespace
 		return result;
 	}
 
-	const int MAX_CONTEXT_PATH_LENGTH = 3;
-
 	void FindPathForNodeRecursive(const UK2Node& a_CurrentNode, EPathDirection a_ExploreDirection, PathPredictionEntry& a_ParentPath, TArray<PathPredictionEntry>& a_Results, int32 a_Depth)
 	{
-		if (a_Depth < MAX_CONTEXT_PATH_LENGTH)
+		if (a_Depth < PathContextPath::MAX_CONTEXT_PATH_LENGTH)
 		{
 			TArray<UK2Node*> children = FindNodesInDirection(a_CurrentNode, a_ExploreDirection);
 			for (UK2Node* child : children)
@@ -67,6 +66,7 @@ namespace
 		{
 			PathPredictionEntry pathEntry = PathPredictionEntry(initialNode);
 			pathEntry.m_AnchorVertex = PathNodeEntry(*node);
+			pathEntry.m_NumUses = 1;
 			result.Push(pathEntry);
 			FindPathForNodeRecursive(*node, a_ExploreDirection, pathEntry, result, 0);
 		}
@@ -77,7 +77,7 @@ namespace
 	void FindAllContextPathsRecursive(const UK2Node& a_Node, EPathDirection a_ExploreDirection, int32 a_Depth, 
 		PathContextPath& a_CurrentPath, TArray<PathContextPath>& a_Results)
 	{
-		if (a_Depth < MAX_CONTEXT_PATH_LENGTH)
+		if (a_Depth < PathContextPath::MAX_CONTEXT_PATH_LENGTH)
 		{
 			TArray<UK2Node*> children = FindNodesInDirection(a_Node, a_ExploreDirection);
 			if (children.Num() > 0)
@@ -116,7 +116,7 @@ namespace
 			{
 				float contextSimilarity = context.CompareContext(entry.m_ContextPath);
 				
-				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity);
+				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity, entry.m_NumUses);
 				a_Output.Push(suggest);
 			}
 		}
@@ -132,8 +132,10 @@ namespace
 			}); 
 			if (containedSuggestion != nullptr)
 			{
-				//Combine scores or pick max? For now we will just go with the max approach.
-				containedSuggestion->SetSuggestionScore(FMath::Max(suggested.GetSuggestionScore(), containedSuggestion->GetSuggestionScore()));
+				//Combine scores or pick max? For now we will just go with the max approach. This might be an interesting field of research right here. 
+				// Do we select nodes based on max context similarity or just on max uses? 
+				containedSuggestion->SetSuggestionContextScore(FMath::Max(suggested.GetSuggestionContextScore(), containedSuggestion->GetSuggestionContextScore()));
+				containedSuggestion->SetSuggestionUsesScore(containedSuggestion->GetSuggestionUsesScore() + suggested.GetSuggestionUsesScore());
 			}
 			else
 			{
@@ -168,6 +170,24 @@ namespace
 		}
 
 		return result;
+	}
+
+	void SelectTopNSuggestions(TArray<Suggestion>& a_InOutSuggestions, int32 a_MaxSuggestionCount)
+	{
+		struct SuggestionNodeSorting
+		{
+			inline bool operator() (const Suggestion& lhs, const Suggestion& rhs) const
+			{
+				return lhs.GetSuggestionContextScore() > rhs.GetSuggestionContextScore();
+			}
+		};
+
+		a_InOutSuggestions.Sort(SuggestionNodeSorting());
+		if (a_InOutSuggestions.Num() > a_MaxSuggestionCount)
+		{
+			a_InOutSuggestions.SetNum(a_MaxSuggestionCount, true);
+			a_InOutSuggestions.Shrink();
+		}
 	}
 }
 
@@ -205,16 +225,6 @@ SuggestionDatabasePath::~SuggestionDatabasePath()
 	FlushDatabase();
 }
 
-void SuggestionDatabasePath::ParseBlueprint(const UBlueprint& a_Blueprint)
-{
-	TArray<UEdGraph*> graphsInBlueprint;
-	a_Blueprint.GetAllGraphs(graphsInBlueprint);
-	for (auto graph : graphsInBlueprint)
-	{
-		ParseGraph(a_Blueprint, *graph);
-	}
-}
-
 void SuggestionDatabasePath::FlushDatabase()
 {
 	m_ForwardPredictionDatabase.Empty();
@@ -239,9 +249,29 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase());
 		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output);
 		CombineSuggestions(a_Output);
-		//TODO: Implement suggestion count constraint. Do we do this here or are we implementing this on the menu side? 
-		// Implementing it on the menu side would allow us to show the top n suggestions in-menu while the remainder 
-		// is stuffed in a category? 
+		SelectTopNSuggestions(a_Output, a_SuggestionCount);
+	}
+}
+
+bool SuggestionDatabasePath::HasSuggestions() const
+{
+	return m_BackwardPredictionDatabase.Num() > 0 || m_ForwardPredictionDatabase.Num() > 0;
+}
+
+void SuggestionDatabasePath::ParseBlueprint(const UBlueprint& a_Blueprint)
+{
+	const FString onlyParsingBlueprint("SideScrollerExampleMap");
+	FString blueprintName;
+	a_Blueprint.GetName(blueprintName);
+	if (blueprintName != onlyParsingBlueprint)
+		return;
+	UE_LOG(LogTemp, Warning, TEXT("This is actually a lie. We are only parsing %s"), *onlyParsingBlueprint);
+
+	TArray<UEdGraph*> graphsInBlueprint;
+	a_Blueprint.GetAllGraphs(graphsInBlueprint);
+	for (auto graph : graphsInBlueprint)
+	{
+		ParseGraph(a_Blueprint, *graph);
 	}
 }
 

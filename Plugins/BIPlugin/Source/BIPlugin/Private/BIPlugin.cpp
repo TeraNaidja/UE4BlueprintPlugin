@@ -1,7 +1,7 @@
 #include "BIPluginPrivatePCH.h"
 
 #include "BIPlugin.h"
-#include "FBlueprintSuggestionProviderManager.h"
+#include "BlueprintSuggestionProviderManager.h"
 #include "SuggestionProvider.h"
 #include "SuggestionDatabaseBase.h"
 #include "SuggestionDatabasePath.h"
@@ -11,15 +11,18 @@ void BIPluginImpl::StartupModule()
 {
 	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Startup"));
 
-	m_NodeInformationDatabase = nullptr;
+	m_NodeInformationDatabase = new GraphNodeInformationDatabase();
 	m_SuggestionDatabase = new SuggestionDatabasePath();
-	m_SuggestionProvider = TSharedPtr<SuggestionProvider>(new SuggestionProvider(*m_SuggestionDatabase));
+	m_SuggestionProvider = TSharedPtr<SuggestionProvider>(new SuggestionProvider(*m_SuggestionDatabase, 
+		SuggestionProvider::RebuildDatabaseDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase)));
 	FBlueprintSuggestionProviderManager::Get().RegisterBlueprintSuggestionProvider(m_SuggestionProvider);
+
+	m_SuggestionDatabase->SetGraphNodeDatabase(m_NodeInformationDatabase);
 
 	m_RebuildCacheCommand = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("BIPlugin_RebuildSuggestionCache"),
 		TEXT("Flushes and Rebuilds blueprint suggestion bache based on all available blueprints in current project."),
-		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase),
+		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase), 
 		ECVF_Default
 		);
 
@@ -35,24 +38,14 @@ void BIPluginImpl::ShutdownModule()
 	delete m_NodeInformationDatabase;
 }
 
-void BIPluginImpl::PostLoadCallback()
-{
-	//Initialization of the node information database is delayed as the FBlueprintActionDatabase does not exist at StartupModule().
-	m_NodeInformationDatabase = new GraphNodeInformationDatabase();
-	m_SuggestionDatabase->SetGraphNodeDatabase(m_NodeInformationDatabase);
-
-	OnRebuildDatabase();
-}
-
 void BIPluginImpl::OnRebuildDatabase()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Rebuilding suggestion database using available blueprints."));
 
-	for (TObjectIterator<UBlueprint> BlueprintIt; BlueprintIt; ++BlueprintIt)
-	{
-		UBlueprint* Blueprint = *BlueprintIt;
-		m_SuggestionDatabase->ParseBlueprint(*Blueprint);
-	}
+	m_NodeInformationDatabase->FillDatabase();
+
+	m_SuggestionDatabase->FlushDatabase();
+	m_SuggestionDatabase->FillSuggestionDatabase();
 }
 
 IMPLEMENT_MODULE(BIPluginImpl, Module)

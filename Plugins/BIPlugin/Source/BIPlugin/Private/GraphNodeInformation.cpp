@@ -15,8 +15,15 @@ namespace
 	}
 }
 
-GraphNodeInformation::GraphNodeInformation(const UK2Node& a_Node)
+GraphNodeInformation::GraphNodeInformation(UK2Node& a_Node)
 {
+	if (a_Node.Pins.Num() == 0)
+	{
+		a_Node.AllocateDefaultPins();
+		UE_LOG(LogTemp, Warning, TEXT("Allocating default pins for node %s"), *a_Node.
+			GetNodeTitle(ENodeTitleType::MenuTitle).ToString());
+	}
+
 	DiscoverNodePinTypes(a_Node, EEdGraphPinDirection::EGPD_Input, m_InputPins);
 	DiscoverNodePinTypes(a_Node, EEdGraphPinDirection::EGPD_Output, m_OutputPins);
 }
