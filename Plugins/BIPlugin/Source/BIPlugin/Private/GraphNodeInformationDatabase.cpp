@@ -5,7 +5,7 @@
 
 namespace
 {
-	UK2Node* FindTemplateNodeForNodeGuid(const FGuid& a_NodeSignatureGuid)
+	UK2Node* FindTemplateNodeForNodeGuid(const FGuid& a_NodeSignatureGuid, UEdGraph* a_OwningGraph)
 	{
 		UK2Node* result = nullptr;
 		FBlueprintActionDatabase::FActionRegistry const& actionDatabase = FBlueprintActionDatabase::Get().GetAllActions();
@@ -13,7 +13,7 @@ namespace
 		{
 			for (UBlueprintNodeSpawner const* nodeSpawner : actionEntry.Value)
 			{
-				UEdGraphNode* nodeTemplate = nodeSpawner->GetTemplateNode();
+				UEdGraphNode* nodeTemplate = nodeSpawner->GetTemplateNode(a_OwningGraph);
 				if (nodeTemplate != nullptr && nodeTemplate->IsA(UK2Node::StaticClass()))
 				{
 					UK2Node* ukNode = Cast<UK2Node>(nodeTemplate);
@@ -70,13 +70,13 @@ void GraphNodeInformationDatabase::FlushDatabase()
 	m_GraphNodeInformation.Empty();
 }
 
-const GraphNodeInformation* GraphNodeInformationDatabase::FindNodeInformation(const FGuid& a_NodeSignatureGuid)
+const GraphNodeInformation* GraphNodeInformationDatabase::FindNodeInformation(const FGuid& a_NodeSignatureGuid, UEdGraph* a_TargetGraph)
 {
 	const GraphNodeInformation* info = m_GraphNodeInformation.Find(a_NodeSignatureGuid);
 
 	if (info == nullptr)
 	{
-		UK2Node* templateNode = FindTemplateNodeForNodeGuid(a_NodeSignatureGuid);
+		UK2Node* templateNode = FindTemplateNodeForNodeGuid(a_NodeSignatureGuid, a_TargetGraph);
 		if (templateNode != nullptr)
 		{
 			GraphNodeInformation nodeInfo(*templateNode);

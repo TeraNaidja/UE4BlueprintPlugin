@@ -11,7 +11,7 @@ public:
 	void FillDatabase();
 	void FlushDatabase();
 
-	const GraphNodeInformation* FindNodeInformation(const FGuid& a_NodeSignatureGuid);
+	const GraphNodeInformation* FindNodeInformation(const FGuid& a_NodeSignatureGuid, UEdGraph* a_ContainingGraph);
 
 private:
 	TMap<FGuid, GraphNodeInformation> m_GraphNodeInformation;

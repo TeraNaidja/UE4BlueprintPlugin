@@ -149,7 +149,7 @@ namespace
 		a_InOutSuggestions = collapsedSuggestions;
 	}
 
-	TArray<PathPredictionEntry> RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(const TArray<PathPredictionEntry>& a_AvailableSuggestions, const UEdGraphPin& a_ConnectingPin, GraphNodeInformationDatabase& a_NodeInfoDatabase)
+	TArray<PathPredictionEntry> RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(const TArray<PathPredictionEntry>& a_AvailableSuggestions, const UEdGraphPin& a_ConnectingPin, GraphNodeInformationDatabase& a_NodeInfoDatabase, UEdGraph* a_ContextGraph)
 	{
 		TArray<PathPredictionEntry> result;
 		result.Reserve(a_AvailableSuggestions.Num());
@@ -157,7 +157,7 @@ namespace
 		for (PathPredictionEntry entry : a_AvailableSuggestions)
 		{
 			const GraphNodeInformation* suggestionNodeInfo = a_NodeInfoDatabase.FindNodeInformation(
-				entry.m_PredictionVertex.m_NodeSignatureGuid);
+				entry.m_PredictionVertex.m_NodeSignatureGuid, a_ContextGraph);
 			//PHILTODO: This looks weird. We could not retrieve information about the suggested node. 
 			if (suggestionNodeInfo != nullptr)
 			{
@@ -244,6 +244,7 @@ void SuggestionDatabasePath::FlushDatabase()
 
 void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output)
 {
+	verify(a_Context.Graphs.Num() == 1); //We assume that we are only dealing with a single graph.
 	verify(a_Context.Pins.Num() == 1); //We assume that we are only dealing with one connected pin now.
 	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? 
 		EPathDirection::Backward : EPathDirection::Forward;
@@ -259,7 +260,7 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	if (suggestionPaths != nullptr)
 	{ 
 		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(
-			*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase());
+			*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase(), a_Context.Graphs[0]);
 		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output);
 		CombineSuggestions(a_Output);
 		SelectTopNSuggestions(a_Output, a_SuggestionCount);
