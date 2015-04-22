@@ -24,8 +24,13 @@ void SuggestionDatabaseBase::SetGraphNodeDatabase(GraphNodeInformationDatabase* 
 	m_GraphNodeDatabase = a_Database;
 }
 
-GraphNodeInformationDatabase& SuggestionDatabaseBase::GetGraphNodeDatabase() const
+const GraphNodeInformationDatabase& SuggestionDatabaseBase::GetGraphNodeDatabase() const
 {
 	verify(m_GraphNodeDatabase != nullptr);
 	return *m_GraphNodeDatabase;
+}
+
+GraphNodeInformationDatabase& SuggestionDatabaseBase::GetGraphNodeDatabase()
+{
+	return const_cast<GraphNodeInformationDatabase&>((const_cast<const SuggestionDatabaseBase*>(this))->GetGraphNodeDatabase());
 }

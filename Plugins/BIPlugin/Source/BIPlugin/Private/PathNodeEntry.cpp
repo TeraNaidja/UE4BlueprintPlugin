@@ -22,3 +22,11 @@ uint32 GetTypeHash(const PathNodeEntry& a_Instance)
 {
 	return GetTypeHash(a_Instance.m_NodeSignatureGuid);
 }
+
+FArchive& operator << (FArchive& a_Archive, PathNodeEntry& a_Value)
+{
+	FString nodeSignature = a_Value.m_NodeSignature.ToString();
+	a_Archive << nodeSignature << a_Value.m_NodeSignatureGuid << a_Value.m_NodeTitle;
+	a_Value.m_NodeSignature = FBlueprintNodeSignature(nodeSignature);
+	return a_Archive;
+}

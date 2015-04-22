@@ -5,6 +5,12 @@
 #include "PathNodeEntry.h"
 #include "PathPredictionEntry.h"
 
+enum class EDatabasePathSerializeVersion
+{
+	VERSION_0_1,
+	VERSION_LATEST = VERSION_0_1
+};
+
 class SuggestionDatabasePath: public SuggestionDatabaseBase
 {
 public:
@@ -16,6 +22,7 @@ public:
 		NodeIndexType(const PathNodeEntry& a_NodeEntry);
 		bool operator ==(const NodeIndexType& a_Other) const;
 		friend uint32 GetTypeHash(const NodeIndexType& a_Instance);
+		friend FArchive& operator << (FArchive& a_Archive, NodeIndexType& a_Value);
 
 		FString m_NodeSignature;
 	};
@@ -26,8 +33,9 @@ public:
 	~SuggestionDatabasePath();
 
 	virtual void FlushDatabase() override;
-	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) const override;
+	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) override;
 	virtual bool HasSuggestions() const override;
+	virtual void Serialize(FArchive& a_Archive) override;
 
 protected:
 	virtual void ParseBlueprint(const UBlueprint& a_Blueprint) override;

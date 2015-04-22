@@ -13,7 +13,12 @@ public:
 
 	void OnRebuildDatabase();
 
+	void SaveDatabaseToFile(const TCHAR* a_FilePath);
+	void LoadDatabaseFromFile(const TCHAR* a_FilePath);
+
 private:
+	void TestFunction();
+
 	TSharedPtr<IBlueprintSuggestionProvider> m_SuggestionProvider;
 	SuggestionDatabaseBase* m_SuggestionDatabase;
 	GraphNodeInformationDatabase* m_NodeInformationDatabase;

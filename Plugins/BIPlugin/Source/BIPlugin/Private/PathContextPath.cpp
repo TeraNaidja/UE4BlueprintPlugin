@@ -21,6 +21,11 @@ bool PathContextPath::operator ==(const PathContextPath& a_Other) const
 	return m_ContextPath == a_Other.m_ContextPath;
 }
 
+FArchive& operator << (FArchive& a_Archive, PathContextPath& a_Value)
+{
+	return a_Archive << a_Value.m_ContextPath;
+}
+
 void PathContextPath::PushNode(const PathNodeEntry& a_Node)
 {
 	m_ContextPath.Push(a_Node);

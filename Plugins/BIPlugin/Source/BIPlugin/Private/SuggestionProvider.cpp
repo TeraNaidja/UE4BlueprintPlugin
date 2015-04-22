@@ -55,7 +55,7 @@ namespace
 	}
 }
 
-SuggestionProvider::SuggestionProvider(const SuggestionDatabaseBase& a_Database, const RebuildDatabaseDelegate& a_RebuildDatabaseDelegate)
+SuggestionProvider::SuggestionProvider(SuggestionDatabaseBase& a_Database, const RebuildDatabaseDelegate& a_RebuildDatabaseDelegate)
 	: m_SuggestionDatabase(a_Database)
 	, m_RebuildDatabaseDelegate(a_RebuildDatabaseDelegate)
 {

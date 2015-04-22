@@ -11,6 +11,7 @@ public:
 	~PathPredictionEntry();
 
 	bool CompareExcludingUses(const PathPredictionEntry& a_Other) const;
+	friend FArchive& operator << (FArchive& a_Archive, PathPredictionEntry& a_Entry);
 
 	//In graph this is ContextPath -> AnchorVertex -> PredictionVertex in the direction of Direction
 	EPathDirection m_Direction;

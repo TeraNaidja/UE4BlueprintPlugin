@@ -27,7 +27,8 @@ namespace
 		TArray<UK2Node*> result;
 		for (auto childPin : a_Node.Pins)
 		{
-			if (childPin->Direction == ToPinDirection(a_ExploreDirection) && !childPin->bHidden && !childPin->bNotConnectable)
+			if (childPin->Direction == ToPinDirection(a_ExploreDirection) && !childPin->bHidden && 
+				!childPin->bNotConnectable)
 			{
 				for (auto linkedPin : childPin->LinkedTo)
 				{
@@ -134,8 +135,10 @@ namespace
 			{
 				//Combine scores or pick max? For now we will just go with the max approach. This might be an interesting field of research right here. 
 				// Do we select nodes based on max context similarity or just on max uses? 
-				containedSuggestion->SetSuggestionContextScore(FMath::Max(suggested.GetSuggestionContextScore(), containedSuggestion->GetSuggestionContextScore()));
-				containedSuggestion->SetSuggestionUsesScore(containedSuggestion->GetSuggestionUsesScore() + suggested.GetSuggestionUsesScore());
+				containedSuggestion->SetSuggestionContextScore(FMath::Max(suggested.GetSuggestionContextScore(), 
+					containedSuggestion->GetSuggestionContextScore()));
+				containedSuggestion->SetSuggestionUsesScore(containedSuggestion->GetSuggestionUsesScore() + 
+					suggested.GetSuggestionUsesScore());
 			}
 			else
 			{
@@ -146,18 +149,20 @@ namespace
 		a_InOutSuggestions = collapsedSuggestions;
 	}
 
-	TArray<PathPredictionEntry> RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(const TArray<PathPredictionEntry>& a_AvailableSuggestions, const UEdGraphPin& a_ConnectingPin, const GraphNodeInformationDatabase& a_NodeInfoDatabase)
+	TArray<PathPredictionEntry> RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(const TArray<PathPredictionEntry>& a_AvailableSuggestions, const UEdGraphPin& a_ConnectingPin, GraphNodeInformationDatabase& a_NodeInfoDatabase)
 	{
 		TArray<PathPredictionEntry> result;
 		result.Reserve(a_AvailableSuggestions.Num());
 
 		for (PathPredictionEntry entry : a_AvailableSuggestions)
 		{
-			const GraphNodeInformation* suggestionNodeInfo = a_NodeInfoDatabase.FindNodeInformation(entry.m_PredictionVertex.m_NodeSignatureGuid);
+			const GraphNodeInformation* suggestionNodeInfo = a_NodeInfoDatabase.FindNodeInformation(
+				entry.m_PredictionVertex.m_NodeSignatureGuid);
 			//PHILTODO: This looks weird. We could not retrieve information about the suggested node. 
 			if (suggestionNodeInfo != nullptr)
 			{
-				EEdGraphPinDirection otherPinDirection = UEdGraphPin::GetComplementaryDirection(a_ConnectingPin.Direction);
+				EEdGraphPinDirection otherPinDirection = UEdGraphPin::GetComplementaryDirection(
+					a_ConnectingPin.Direction);
 				if (suggestionNodeInfo->HasPinTypeInDirection(a_ConnectingPin.PinType, otherPinDirection))
 				{
 					result.Push(entry);
@@ -165,7 +170,8 @@ namespace
 			}
 			else
 			{
-				UE_LOG(LogTemp, Log, TEXT("Got no information about suggested node %s"), *(entry.m_PredictionVertex.m_NodeTitle.ToString()));
+				UE_LOG(LogTemp, Log, TEXT("Got no information about suggested node %s"), 
+					*(entry.m_PredictionVertex.m_NodeTitle.ToString()));
 			}
 		}
 
@@ -216,6 +222,11 @@ uint32 GetTypeHash(const SuggestionDatabasePath::NodeIndexType& a_Instance)
 	return FCrc::MemCrc32(*a_Instance.m_NodeSignature, a_Instance.m_NodeSignature.Len() * sizeof(TCHAR));
 }
 
+FArchive& operator << (FArchive& a_Archive, SuggestionDatabasePath::NodeIndexType& a_Value)
+{
+	return a_Archive << a_Value.m_NodeSignature;
+}
+
 SuggestionDatabasePath::SuggestionDatabasePath()
 {
 }
@@ -231,10 +242,11 @@ void SuggestionDatabasePath::FlushDatabase()
 	m_BackwardPredictionDatabase.Empty();
 }
 
-void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) const
+void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output)
 {
 	verify(a_Context.Pins.Num() == 1); //We assume that we are only dealing with one connected pin now.
-	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? EPathDirection::Backward : EPathDirection::Forward;
+	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? 
+		EPathDirection::Backward : EPathDirection::Forward;
 	const UK2Node& ownerNode = *a_Context.Pins[0].OwnerNode;
 	NodeIndexType nodeIndex = NodeIndexType(ownerNode);
 
@@ -246,7 +258,8 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	const TArray<PathPredictionEntry>* suggestionPaths = db.Find(nodeIndex);
 	if (suggestionPaths != nullptr)
 	{ 
-		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase());
+		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(
+			*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase());
 		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output);
 		CombineSuggestions(a_Output);
 		SelectTopNSuggestions(a_Output, a_SuggestionCount);
@@ -258,14 +271,30 @@ bool SuggestionDatabasePath::HasSuggestions() const
 	return m_BackwardPredictionDatabase.Num() > 0 || m_ForwardPredictionDatabase.Num() > 0;
 }
 
+void SuggestionDatabasePath::Serialize(FArchive& a_Archive)
+{
+	int32 fileVersion = (int32)EDatabasePathSerializeVersion::VERSION_LATEST;
+	a_Archive << fileVersion;
+	if (fileVersion == (int32)EDatabasePathSerializeVersion::VERSION_LATEST)
+	{
+		a_Archive << m_ForwardPredictionDatabase;
+		a_Archive << m_BackwardPredictionDatabase;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Could not deserialize suggestion database information. Version difference in \
+			file (%i) and code (%i)"), fileVersion, (int32)EDatabasePathSerializeVersion::VERSION_LATEST);
+	}
+}
+
 void SuggestionDatabasePath::ParseBlueprint(const UBlueprint& a_Blueprint)
 {
-	const FString onlyParsingBlueprint("SideScrollerExampleMap");
-	FString blueprintName;
-	a_Blueprint.GetName(blueprintName);
-	if (blueprintName != onlyParsingBlueprint)
-		return;
-	UE_LOG(LogTemp, Warning, TEXT("This is actually a lie. We are only parsing %s"), *onlyParsingBlueprint);
+	//const FString onlyParsingBlueprint("SideScrollerExampleMap");
+	//FString blueprintName;
+	//a_Blueprint.GetName(blueprintName);
+	//if (blueprintName != onlyParsingBlueprint)
+	//	return;
+	//UE_LOG(LogTemp, Warning, TEXT("This is actually a lie. We are only parsing %s"), *onlyParsingBlueprint);
 
 	TArray<UEdGraph*> graphsInBlueprint;
 	a_Blueprint.GetAllGraphs(graphsInBlueprint);

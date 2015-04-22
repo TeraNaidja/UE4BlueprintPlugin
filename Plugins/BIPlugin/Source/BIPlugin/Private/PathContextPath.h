@@ -13,6 +13,7 @@ public:
 	~PathContextPath();
 
 	bool operator == (const PathContextPath& a_Other) const;
+	friend FArchive& operator << (FArchive& a_Archive, PathContextPath& a_Value);
 
 	void PushNode(const PathNodeEntry& a_Node);
 	float CompareContext(const PathContextPath& a_Other) const;

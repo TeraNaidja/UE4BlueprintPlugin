@@ -9,8 +9,9 @@ public:
 	~GraphNodeInformationDatabase();
 
 	void FillDatabase();
+	void FlushDatabase();
 
-	const GraphNodeInformation* FindNodeInformation(const FGuid& a_NodeSignatureGuid) const;
+	const GraphNodeInformation* FindNodeInformation(const FGuid& a_NodeSignatureGuid);
 
 private:
 	TMap<FGuid, GraphNodeInformation> m_GraphNodeInformation;
