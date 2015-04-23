@@ -13,6 +13,12 @@ public:
 
 	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& InContext, TArray<TSharedPtr<FBlueprintSuggestion>>& OutEntries) override;
 private:
+	void SubscribeToGraphChanged(UEdGraph* a_Graph);
+	void OnGraphChanged(const FEdGraphEditAction& a_Action);
+
 	SuggestionDatabaseBase& m_SuggestionDatabase;
 	RebuildDatabaseDelegate m_RebuildDatabaseDelegate;
+
+	UEdGraph* m_LastGraphForSuggestions;
+	FDelegateHandle m_OnGraphChangedHandle;
 };

@@ -5,69 +5,33 @@
 #include "Suggestion.h"
 #include "BlueprintSuggestion.h"
 #include "SuggestionDatabaseBase.h"
+#include "BlueprintSuggestionContext.h"
 
 namespace
 {
-	void BacktrackNodeRecursive(UK2Node* a_Node, EEdGraphPinDirection a_ExploreDirection, FString& out_Result)
-	{
-		FBlueprintNodeSignature signature = a_Node->GetSignature();
-		a_Node->GetClass()->AppendName(out_Result);
-		out_Result.Append("(").Append(a_Node->GetSignature().ToString()).Append(")"); 
-		out_Result.Append(" >> ");
-
-		for (auto childPin : a_Node->Pins)
-		{
-			if (childPin->Direction == a_ExploreDirection && !childPin->bHidden && !childPin->bNotConnectable)
-			{
-				for (auto linkedPin : childPin->LinkedTo)
-				{
-					check(linkedPin->GetOuter()->IsA(UK2Node::StaticClass()));
-					UK2Node* parentNode = Cast<UK2Node>(linkedPin->GetOuter());
-					BacktrackNodeRecursive(parentNode, a_ExploreDirection, out_Result);
-				}
-			}
-		}
-	}
-
-	FString GetBacktrackPath(UK2Node* a_SourceNode, EEdGraphPinDirection a_SourceDirection)
-	{
-		FString returnValue;
-
-		EEdGraphPinDirection exploreDirection = EEdGraphPinDirection::EGPD_Output;
-		switch (a_SourceDirection)
-		{
-		case EEdGraphPinDirection::EGPD_Input:
-			exploreDirection = EEdGraphPinDirection::EGPD_Output;
-			break;
-		case EEdGraphPinDirection::EGPD_Output:
-			exploreDirection = EEdGraphPinDirection::EGPD_Input;
-			break;
-		default:
-			UE_LOG(LogTemp, Error, TEXT("Unknown EEdGraphPinDirection encountered"));
-			break;
-		}
-
-		BacktrackNodeRecursive(a_SourceNode, exploreDirection, returnValue);
-
-		UE_LOG(LogTemp, Warning, TEXT("%s"), *returnValue);
-
-		return returnValue;
-	}
 }
 
 SuggestionProvider::SuggestionProvider(SuggestionDatabaseBase& a_Database, const RebuildDatabaseDelegate& a_RebuildDatabaseDelegate)
 	: m_SuggestionDatabase(a_Database)
 	, m_RebuildDatabaseDelegate(a_RebuildDatabaseDelegate)
+	, m_LastGraphForSuggestions(nullptr)
 {
 }
 
 SuggestionProvider::~SuggestionProvider()
 {
+	if (m_LastGraphForSuggestions != nullptr)
+	{
+		m_LastGraphForSuggestions->RemoveOnGraphChangedHandler(m_OnGraphChangedHandle);
+		m_LastGraphForSuggestions = nullptr;
+	}
 }
 
 void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& InContext, TArray<TSharedPtr<FBlueprintSuggestion>>& OutEntries)
 {
 	const int32 NUM_SUGGESTIONS = 5;
+
+	SubscribeToGraphChanged(InContext.Graphs[0]);
 
 	TArray<Suggestion> suggestions;
 	suggestions.Reserve(NUM_SUGGESTIONS);
@@ -88,5 +52,40 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 			suggested.GetSuggestionContextScore(), 
 			suggested.GetSuggestionUsesScore())));
 		++suggestionId;
+	}
+}
+
+void SuggestionProvider::SubscribeToGraphChanged(UEdGraph* a_Graph)
+{
+	if (m_LastGraphForSuggestions != a_Graph)
+	{
+		if (m_LastGraphForSuggestions != nullptr)
+		{
+			m_LastGraphForSuggestions->RemoveOnGraphChangedHandler(m_OnGraphChangedHandle);
+		}
+		m_LastGraphForSuggestions = a_Graph;
+		m_OnGraphChangedHandle = m_LastGraphForSuggestions->AddOnGraphChangedHandler(
+			FOnGraphChanged::FDelegate::CreateRaw(this, &SuggestionProvider::OnGraphChanged));
+	}
+}
+
+void SuggestionProvider::OnGraphChanged(const FEdGraphEditAction& a_Action)
+{
+	//Need to add in suggestions here for when a node is created or re-linked.
+
+	if (a_Action.Action == GRAPHACTION_PinConnectionCreated)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Graph Changed; Node connection created. Adding suggestion to the database"));
+		verify(a_Action.Nodes.Num() == 2); //We assume that we have two nodes in this action which the link is created from and to.
+		const UEdGraphNode* uncastedNodeA = a_Action.Nodes[FSetElementId::FromInteger(0)];
+		const UEdGraphNode* uncastedNodeB = a_Action.Nodes[FSetElementId::FromInteger(1)];
+
+		verify(uncastedNodeA->IsA(UK2Node::StaticClass()));
+		verify(uncastedNodeB->IsA(UK2Node::StaticClass()));
+
+		const UK2Node* nodeA = Cast<UK2Node>(uncastedNodeA);
+		const UK2Node* nodeB = Cast<UK2Node>(uncastedNodeB);
+
+		m_SuggestionDatabase.GenerateSuggestionForCreatedLink(*nodeA, *nodeB);
 	}
 }
