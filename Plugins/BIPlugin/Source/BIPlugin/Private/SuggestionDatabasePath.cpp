@@ -272,6 +272,14 @@ bool SuggestionDatabasePath::HasSuggestions() const
 	return m_BackwardPredictionDatabase.Num() > 0 || m_ForwardPredictionDatabase.Num() > 0;
 }
 
+void SuggestionDatabasePath::GenerateSuggestionForCreatedLink(const UK2Node& a_NodeA, const UK2Node& a_NodeB)
+{
+	ParseNode(a_NodeA, EPathDirection::Forward, a_NodeB);
+	ParseNode(a_NodeA, EPathDirection::Backward, a_NodeB);
+	ParseNode(a_NodeB, EPathDirection::Forward, a_NodeA);
+	ParseNode(a_NodeB, EPathDirection::Backward, a_NodeA);
+}
+
 void SuggestionDatabasePath::Serialize(FArchive& a_Archive)
 {
 	int32 fileVersion = (int32)EDatabasePathSerializeVersion::VERSION_LATEST;
@@ -322,6 +330,18 @@ void SuggestionDatabasePath::ParseNode(const UK2Node& a_Node, EPathDirection a_D
 	for (PathPredictionEntry entry : preditionPaths)
 	{
 		AddToPredictionDatabase(entry, a_Direction);
+	}
+}
+
+void SuggestionDatabasePath::ParseNode(const UK2Node& a_Node, EPathDirection a_Direction, const UK2Node& a_AnchorNodeConstraint)
+{
+	TArray<PathPredictionEntry> preditionPaths = CreatePredictionPathsForNode(a_Node, a_Direction);
+	for (PathPredictionEntry entry : preditionPaths)
+	{
+		if (entry.m_AnchorVertex.m_NodeSignatureGuid == a_AnchorNodeConstraint.GetSignature().AsGuid())
+		{
+			AddToPredictionDatabase(entry, a_Direction);
+		}
 	}
 }
 

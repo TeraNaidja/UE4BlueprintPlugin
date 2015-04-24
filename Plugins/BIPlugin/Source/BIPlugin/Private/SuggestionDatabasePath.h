@@ -35,6 +35,7 @@ public:
 	virtual void FlushDatabase() override;
 	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) override;
 	virtual bool HasSuggestions() const override;
+	virtual void GenerateSuggestionForCreatedLink(const UK2Node& a_NodeA, const UK2Node& a_NodeB) override;
 	virtual void Serialize(FArchive& a_Archive) override;
 
 protected:
@@ -43,6 +44,8 @@ protected:
 private:
 	void ParseGraph(const UBlueprint& a_Blueprint, const UEdGraph& a_Graph);
 	void ParseNode(const UK2Node& a_Node, EPathDirection a_Direction);
+	/** Creates suggestions for a node, but has the additional constraint of requiring the first node (Anchor) to match */
+	void ParseNode(const UK2Node& a_node, EPathDirection a_Direction, const UK2Node& a_AnchorNodeConstraint);
 	void AddToPredictionDatabase(const PathPredictionEntry& a_Entry, EPathDirection a_PathDirection);
 
 	PredictionDatabase m_ForwardPredictionDatabase;
