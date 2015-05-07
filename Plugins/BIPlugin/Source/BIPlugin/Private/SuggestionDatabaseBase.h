@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EPathDirection.h"
 #include "Suggestion.h"
 
 class GraphNodeInformationDatabase;
@@ -7,20 +8,38 @@ struct FBlueprintSuggestionContext;
 class SuggestionDatabaseBase
 {
 public:
+	struct CrossValidateResult
+	{
+		CrossValidateResult()
+			: m_TestsPerformed(0)
+			, m_PassedPrecision(0)
+			, m_CyclesTaken(0)
+		{
+		}
+
+		int32 m_TestsPerformed;
+		int32 m_PassedPrecision;
+		uint32 m_CyclesTaken;
+	};
+
 	SuggestionDatabaseBase();
-	~SuggestionDatabaseBase();
+	virtual ~SuggestionDatabaseBase();
 
 	void FillSuggestionDatabase();
 	virtual void FlushDatabase() = 0;
 	virtual void ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output) = 0;
 	virtual bool HasSuggestions() const = 0;
 	virtual void GenerateSuggestionForCreatedLink(const UK2Node& a_NodeA, const UK2Node& a_NodeB) = 0;
+	virtual CrossValidateResult CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node) = 0;
 
 	virtual void Serialize(FArchive& a_Archive) = 0;
 
+	void PerformKFoldCrossValidationTest(int32 a_Folds);
 	void SetGraphNodeDatabase(GraphNodeInformationDatabase* a_Database);
 protected:
-	virtual void ParseBlueprint(const UBlueprint& a_Blueprint) = 0;
+	void ParseBlueprint(const UBlueprint& a_Blueprint);
+	void ParseGraph(const UEdGraph& a_Graph);
+	virtual void ParseNode(const UK2Node& a_Node, EPathDirection a_Direction) = 0;
 	const GraphNodeInformationDatabase& GetGraphNodeDatabase() const;
 	GraphNodeInformationDatabase& GetGraphNodeDatabase();
 

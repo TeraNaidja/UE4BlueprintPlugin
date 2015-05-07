@@ -10,17 +10,11 @@
 namespace
 {
 	const TCHAR* PLUGIN_DATABASE_PATH = TEXT("BIPluginData.bin");
-
-	void TestFunction()
-	{
-	}
 }
-
-IConsoleCommand* TestFunctionCommand = nullptr;
 
 void BIPluginImpl::StartupModule()
 {
-	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Startup"));
+	UE_LOG(BILog, Warning, TEXT("BIPlugin Startup"));
 
 	m_NodeInformationDatabase = new GraphNodeInformationDatabase();
 	m_SuggestionDatabase = new SuggestionDatabasePath();
@@ -32,24 +26,28 @@ void BIPluginImpl::StartupModule()
 
 	LoadDatabaseFromFile(PLUGIN_DATABASE_PATH);
 
-	m_RebuildCacheCommand = IConsoleManager::Get().RegisterConsoleCommand(
+	IConsoleManager& consoleManager = IConsoleManager::Get();
+	m_RebuildCacheCommand = consoleManager.RegisterConsoleCommand(
 		TEXT("BIPlugin_RebuildSuggestionCache"),
-		TEXT("Flushes and Rebuilds blueprint suggestion bache based on all available blueprints in current project."),
+		TEXT("Flushes and Rebuilds blueprint suggestion cache based on all available blueprints in current project."),
 		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::OnRebuildDatabase), 
 		ECVF_Default
 		);
-	TestFunctionCommand = IConsoleManager::Get().RegisterConsoleCommand(
-		TEXT("BIPlugin_TestFunction"),
-		TEXT("Your general purpose test function."),
-		FConsoleCommandDelegate::CreateRaw(this, &BIPluginImpl::TestFunction),
+	m_PerformKFoldCrossValidationCommand = consoleManager.RegisterConsoleCommand(
+		TEXT("BIPlugin_PerformKFoldCrossValidation"),
+		TEXT("Performs a K-Fold Cross-Validation test to assess the accuracy of the suggestions. Requires 1 argument: number of folds"),
+		FConsoleCommandWithArgsDelegate::CreateRaw(this, &BIPluginImpl::OnPerformKFoldCrossValidation),
 		ECVF_Default
 		);
 }
 
 void BIPluginImpl::ShutdownModule()
 {
-	UE_LOG(LogTemp, Warning, TEXT("BIPlugin Shutdown"));
-	IConsoleManager::Get().UnregisterConsoleObject(TestFunctionCommand);
+	SaveDatabaseToFile(PLUGIN_DATABASE_PATH);
+
+	UE_LOG(BILog, Warning, TEXT("BIPlugin Shutdown"));
+
+	IConsoleManager::Get().UnregisterConsoleObject(m_PerformKFoldCrossValidationCommand);
 	IConsoleManager::Get().UnregisterConsoleObject(m_RebuildCacheCommand);
 	FBlueprintSuggestionProviderManager::Get().DeregisterBlueprintSuggestionProvider(m_SuggestionProvider);
 	m_SuggestionProvider.Reset();
@@ -59,7 +57,7 @@ void BIPluginImpl::ShutdownModule()
 
 void BIPluginImpl::OnRebuildDatabase()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Rebuilding suggestion database using available blueprints."));
+	UE_LOG(BILog, Warning, TEXT("Rebuilding suggestion database using available blueprints."));
 
 	m_NodeInformationDatabase->FlushDatabase();
 	m_NodeInformationDatabase->FillDatabase();
@@ -70,6 +68,7 @@ void BIPluginImpl::OnRebuildDatabase()
 
 void BIPluginImpl::SaveDatabaseToFile(const TCHAR* a_FilePath)
 {
+	UE_LOG(BILog, Log, TEXT("Serializing BI Plugin database to '%s'"), a_FilePath);
 	FArchive* fileArchive = IFileManager::Get().CreateFileWriter(a_FilePath);
 
 	m_SuggestionDatabase->Serialize(*fileArchive);
@@ -80,6 +79,7 @@ void BIPluginImpl::SaveDatabaseToFile(const TCHAR* a_FilePath)
 
 void BIPluginImpl::LoadDatabaseFromFile(const TCHAR* a_FilePath)
 {
+	UE_LOG(BILog, Log, TEXT("Deserializing BI Plugin database from '%s'"), a_FilePath);
 	FArchive* fileArchive = IFileManager::Get().CreateFileReader(a_FilePath);
 
 	m_SuggestionDatabase->Serialize(*fileArchive);
@@ -88,10 +88,24 @@ void BIPluginImpl::LoadDatabaseFromFile(const TCHAR* a_FilePath)
 	delete fileArchive;
 }
 
-void BIPluginImpl::TestFunction()
+void BIPluginImpl::OnPerformKFoldCrossValidation(const TArray<FString>& a_Arguments)
 {
-	SaveDatabaseToFile(PLUGIN_DATABASE_PATH);
-	LoadDatabaseFromFile(PLUGIN_DATABASE_PATH);
+	if (a_Arguments.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Expected 1 argument (num folds) for KFold Cross validation test."));
+	}
+	else
+	{
+		int32 numFolds = FCString::Atoi(*a_Arguments[0]);
+		if (numFolds > 0)
+		{
+			m_SuggestionDatabase->PerformKFoldCrossValidationTest(numFolds);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Expected an integer >0 for numfolds. Suggested number is 10."));
+		}
+	}
 }
 
 IMPLEMENT_MODULE(BIPluginImpl, Module)

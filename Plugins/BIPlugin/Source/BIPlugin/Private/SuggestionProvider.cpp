@@ -6,7 +6,6 @@
 #include "BlueprintSuggestion.h"
 #include "SuggestionDatabaseBase.h"
 #include "BlueprintSuggestionContext.h"
-#include "BILog.h"
 
 namespace
 {
@@ -74,11 +73,19 @@ void SuggestionProvider::OnGraphChanged(const FEdGraphEditAction& a_Action)
 {
 	//Need to add in suggestions here for when a node is created or re-linked.
 
+	const FSetElementId firstIndex = FSetElementId::FromInteger(0);
+
+	if (a_Action.Action == GRAPHACTION_AddNode || a_Action.Action == GRAPHACTION_AddNodeUI)
+	{
+		UE_LOG(BILog, BI_VERBOSE, TEXT("Blueprint Node Added: %s"),
+			*a_Action.Nodes[firstIndex]->GetNodeTitle(ENodeTitleType::MenuTitle).ToString());
+	}
+
 	if (a_Action.Action == GRAPHACTION_PinConnectionCreated)
 	{
 		UE_LOG(BILog, Log, TEXT("Graph Changed; Node connection created. Adding suggestion to the database"));
 		verify(a_Action.Nodes.Num() == 2); //We assume that we have two nodes in this action which the link is created from and to.
-		const UEdGraphNode* uncastedNodeA = a_Action.Nodes[FSetElementId::FromInteger(0)];
+		const UEdGraphNode* uncastedNodeA = a_Action.Nodes[firstIndex];
 		const UEdGraphNode* uncastedNodeB = a_Action.Nodes[FSetElementId::FromInteger(1)];
 
 		verify(uncastedNodeA->IsA(UK2Node::StaticClass()));

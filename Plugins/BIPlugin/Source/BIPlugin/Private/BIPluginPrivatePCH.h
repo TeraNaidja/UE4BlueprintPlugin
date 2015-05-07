@@ -2,3 +2,4 @@
 
 #include "UnrealEd.h"
 #include "BlueprintGraphClasses.h"
+#include "BILog.h"

@@ -20,7 +20,7 @@ GraphNodeInformation::GraphNodeInformation(UK2Node& a_Node)
 	if (a_Node.Pins.Num() == 0)
 	{
 		a_Node.AllocateDefaultPins();
-		UE_LOG(LogTemp, Warning, TEXT("Allocating default pins for node %s"), *a_Node.
+		UE_LOG(BILog, Warning, TEXT("Allocating default pins for node %s"), *a_Node.
 			GetNodeTitle(ENodeTitleType::MenuTitle).ToString());
 	}
 

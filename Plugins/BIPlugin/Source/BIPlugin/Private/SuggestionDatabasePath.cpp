@@ -17,9 +17,15 @@ namespace
 		case EPathDirection::Backward:
 			return EEdGraphPinDirection::EGPD_Output;
 		default:
-			UE_LOG(LogTemp, Warning, TEXT("Unknown EPathDirection while translating to pin direction in ToPinDirection"));
+			UE_LOG(BILog, Fatal, TEXT("Unknown EPathDirection while translating to pin direction in ToPinDirection"));
 			return EEdGraphPinDirection::EGPD_Input;
 		}
+	}
+
+	UK2Node* GetNodeFromPin(const UEdGraphPin* a_Pin)
+	{
+		check(a_Pin->GetOuter()->IsA(UK2Node::StaticClass()));
+		return Cast<UK2Node>(a_Pin->GetOuter());
 	}
 
 	TArray<UK2Node*> FindNodesInDirection(const UK2Node& a_Node, EPathDirection a_ExploreDirection)
@@ -32,8 +38,7 @@ namespace
 			{
 				for (auto linkedPin : childPin->LinkedTo)
 				{
-					check(linkedPin->GetOuter()->IsA(UK2Node::StaticClass()));
-					UK2Node* parentNode = Cast<UK2Node>(linkedPin->GetOuter());
+					UK2Node* parentNode = GetNodeFromPin(linkedPin);
 					result.Push(parentNode);
 				}
 			}
@@ -109,13 +114,14 @@ namespace
 		return result;
 	}
 
-	void FilterSuggestionsUsingContextPaths(const TArray<PathPredictionEntry>& a_AvailableSuggestionPaths, const TArray<PathContextPath>& a_AvailableContextPaths, TArray<Suggestion>& a_Output)
+	void FilterSuggestionsUsingContextPaths(const TArray<PathPredictionEntry>& a_AvailableSuggestionPaths, const TArray<PathContextPath>& a_AvailableContextPaths, TArray<Suggestion>& a_Output, int32 a_Flags)
 	{
 		for (const PathPredictionEntry& entry : a_AvailableSuggestionPaths)
 		{
 			for (const PathContextPath& context : a_AvailableContextPaths)
 			{
-				float contextSimilarity = context.CompareContext(entry.m_ContextPath);
+				float contextSimilarity = ((a_Flags & ESuggestionFlags::CalculateContext) != 0) ? 
+					context.CompareContext(entry.m_ContextPath) : 0.0f;
 				
 				Suggestion suggest(entry.m_PredictionVertex.m_NodeSignature, contextSimilarity, entry.m_NumUses);
 				a_Output.Push(suggest);
@@ -170,30 +176,66 @@ namespace
 			}
 			else
 			{
-				UE_LOG(LogTemp, Log, TEXT("Got no information about suggested node %s"), 
-					*(entry.m_PredictionVertex.m_NodeTitle.ToString()));
+				UE_LOG(BILog, Warning, TEXT("Got no information about suggested node %s in graph %s"), 
+					*(entry.m_PredictionVertex.m_NodeTitle.ToString()), *(a_ContextGraph->GetName()));
 			}
 		}
 
 		return result;
 	}
 
-	void SelectTopNSuggestions(TArray<Suggestion>& a_InOutSuggestions, int32 a_MaxSuggestionCount)
+	void SelectTopNSuggestions(TArray<Suggestion>& a_InOutSuggestions, int32 a_MaxSuggestionCount, int32 a_Flags)
 	{
-		struct SuggestionNodeSorting
+		struct SuggestionNodeSortingContextOverUses
 		{
 			inline bool operator() (const Suggestion& lhs, const Suggestion& rhs) const
 			{
-				return lhs.GetSuggestionContextScore() > rhs.GetSuggestionContextScore();
+				return lhs.GetSuggestionContextScore() > rhs.GetSuggestionContextScore() || 
+					(lhs.GetSuggestionContextScore() == rhs.GetSuggestionContextScore() && 
+					lhs.GetSuggestionUsesScore() > rhs.GetSuggestionUsesScore());
 			}
 		};
 
-		a_InOutSuggestions.Sort(SuggestionNodeSorting());
+		struct SuggestionNodeSortingUsesOverContext
+		{
+			inline bool operator() (const Suggestion& lhs, const Suggestion& rhs) const
+			{
+				return lhs.GetSuggestionUsesScore() > rhs.GetSuggestionUsesScore() ||
+					(lhs.GetSuggestionUsesScore() == rhs.GetSuggestionUsesScore() &&
+					lhs.GetSuggestionContextScore() > rhs.GetSuggestionContextScore());
+			}
+		};
+
+		if ((a_Flags & ESuggestionFlags::SortUsesOverContext) != 0)
+		{
+			a_InOutSuggestions.Sort(SuggestionNodeSortingUsesOverContext());
+		}
+		else
+		{
+			a_InOutSuggestions.Sort(SuggestionNodeSortingContextOverUses());
+		}
+
 		if (a_InOutSuggestions.Num() > a_MaxSuggestionCount)
 		{
 			a_InOutSuggestions.SetNum(a_MaxSuggestionCount, true);
 			a_InOutSuggestions.Shrink();
 		}
+	}
+
+	bool StringToSuggestionFlag(const FString& a_InputString, ESuggestionFlags::Flags& a_OutputFlag)
+	{
+		bool succes = false;
+		if (a_InputString.Compare(TEXT("SortUsesOverContext"), ESearchCase::IgnoreCase) == 0)
+		{
+			a_OutputFlag = ESuggestionFlags::SortUsesOverContext;
+			succes = true;
+		}
+		else if (a_InputString.Compare(TEXT("CalculateContext"), ESearchCase::IgnoreCase) == 0)
+		{
+			a_OutputFlag = ESuggestionFlags::CalculateContext;
+			succes = true;
+		}
+		return succes;
 	}
 }
 
@@ -228,6 +270,9 @@ FArchive& operator << (FArchive& a_Archive, SuggestionDatabasePath::NodeIndexTyp
 }
 
 SuggestionDatabasePath::SuggestionDatabasePath()
+	: m_SuggestionFlags(ESuggestionFlags::CalculateContext)
+	, m_ToggleFlagCommand(TEXT("BIPlugin_ToggleSelectionFlag"), TEXT("Hue^3"), 
+	FConsoleCommandWithArgsDelegate::CreateRaw(this, &SuggestionDatabasePath::ToggleSuggestionFlag))
 {
 }
 
@@ -246,6 +291,13 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 {
 	verify(a_Context.Graphs.Num() == 1); //We assume that we are only dealing with a single graph.
 	verify(a_Context.Pins.Num() == 1); //We assume that we are only dealing with one connected pin now.
+
+	const uint32 startTime = FPlatformTime::Cycles();
+
+	UE_LOG(BILog, BI_VERBOSE, TEXT("Providing suggestions for context: (Node %s, PinType %s)"),
+		*a_Context.Pins[0].OwnerNode->GetNodeTitle(ENodeTitleType::MenuTitle).ToString(), 
+		*a_Context.Pins[0].Pin->PinType.PinCategory);
+
 	EPathDirection direction = (a_Context.Pins[0].Pin->Direction == EEdGraphPinDirection::EGPD_Input)? 
 		EPathDirection::Backward : EPathDirection::Forward;
 	const UK2Node& ownerNode = *a_Context.Pins[0].OwnerNode;
@@ -254,6 +306,13 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	//TODO: BlueprintGraph.K2Node_VariableGet::GetSignature() Fix to differentiate between fields? 
 	TArray<PathContextPath> availableContextPaths = FindAllContextPaths(ownerNode, direction);
 
+	UE_LOG(BILog, BI_VERBOSE, TEXT("Found %i context paths: "), availableContextPaths.Num());
+	for (const PathContextPath& contextPath : availableContextPaths)
+	{
+		UE_LOG(BILog, BI_VERBOSE, TEXT("\t%s >> %s"), 
+			*a_Context.Pins[0].OwnerNode->GetNodeTitle(ENodeTitleType::MenuTitle).ToString(), *contextPath.GetPathString());
+	}
+
 	PredictionDatabase db = (direction == EPathDirection::Forward) ? m_ForwardPredictionDatabase : m_BackwardPredictionDatabase;
 
 	const TArray<PathPredictionEntry>* suggestionPaths = db.Find(nodeIndex);
@@ -261,9 +320,15 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 	{ 
 		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(
 			*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase(), a_Context.Graphs[0]);
-		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output);
+		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output, m_SuggestionFlags);
 		CombineSuggestions(a_Output);
-		SelectTopNSuggestions(a_Output, a_SuggestionCount);
+		SelectTopNSuggestions(a_Output, a_SuggestionCount, m_SuggestionFlags);
+	}
+
+	UE_LOG(BILog, BI_VERBOSE, TEXT("Got %i suggestions (%.2f ms): "), a_Output.Num(), FPlatformTime::ToMilliseconds(FPlatformTime::Cycles() - startTime));
+	for (const auto& suggestion : a_Output)
+	{
+		UE_LOG(BILog, BI_VERBOSE, TEXT("\t%s"), *suggestion.GetNodeSignature().ToString());
 	}
 }
 
@@ -291,37 +356,52 @@ void SuggestionDatabasePath::Serialize(FArchive& a_Archive)
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Could not deserialize suggestion database information. Version difference in \
-			file (%i) and code (%i)"), fileVersion, (int32)EDatabasePathSerializeVersion::VERSION_LATEST);
+		UE_LOG(BILog, Warning, TEXT("Could not deserialize suggestion database information. Version difference in \
+			file (%i) and code (%i)"), fileVersion, static_cast<int32>(EDatabasePathSerializeVersion::VERSION_LATEST));
 	}
 }
 
-void SuggestionDatabasePath::ParseBlueprint(const UBlueprint& a_Blueprint)
+SuggestionDatabaseBase::CrossValidateResult SuggestionDatabasePath::CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node)
 {
-	//const FString onlyParsingBlueprint("SideScrollerExampleMap");
-	//FString blueprintName;
-	//a_Blueprint.GetName(blueprintName);
-	//if (blueprintName != onlyParsingBlueprint)
-	//	return;
-	//UE_LOG(LogTemp, Warning, TEXT("This is actually a lie. We are only parsing %s"), *onlyParsingBlueprint);
+	const int32 NUM_SUGGESTIONS = 5;
 
-	TArray<UEdGraph*> graphsInBlueprint;
-	a_Blueprint.GetAllGraphs(graphsInBlueprint);
-	for (auto graph : graphsInBlueprint)
-	{
-		ParseGraph(a_Blueprint, *graph);
-	}
-}
+	CrossValidateResult result;
 
-void SuggestionDatabasePath::ParseGraph(const UBlueprint& a_Blueprint, const UEdGraph& a_Graph)
-{
-	TArray<UK2Node*> nodes;
-	a_Graph.GetNodesOfClass(nodes);
-	for (UK2Node* node : nodes)
+	TArray<Suggestion> suggestResult;
+	suggestResult.Reserve(NUM_SUGGESTIONS);
+	for (UEdGraphPin* pin : a_Node.Pins)
 	{
-		ParseNode(*node, EPathDirection::Forward);
-		ParseNode(*node, EPathDirection::Backward);
+		if (pin->LinkedTo.Num() > 0)
+		{
+			result.m_TestsPerformed++;
+
+			FBlueprintSuggestionContext::FPinParentCombo pinInfo;
+			pinInfo.OwnerNode = &a_Node;
+			pinInfo.Pin = pin;
+			FBlueprintSuggestionContext context;
+			context.Graphs.Push(&a_Graph);
+			context.Pins.Push(pinInfo);
+
+			const uint32 startCycles = FPlatformTime::Cycles();
+			ProvideSuggestions(context, NUM_SUGGESTIONS, suggestResult);
+			result.m_CyclesTaken += FPlatformTime::Cycles() - startCycles;
+
+			for (UEdGraphPin* otherPin : pin->LinkedTo)
+			{
+				UK2Node* otherNode = GetNodeFromPin(otherPin);
+				FBlueprintNodeSignature otherSignature = otherNode->GetSignature();
+				FGuid otherSignatureGuid = otherSignature.AsGuid();
+				if (suggestResult.ContainsByPredicate([&] (const Suggestion& obj) -> bool {
+					return obj.GetNodeSignatureGuid() == otherSignatureGuid;
+				}))
+				{
+					result.m_PassedPrecision++;
+				}
+			}
+		}
 	}
+
+	return result;
 }
 
 void SuggestionDatabasePath::ParseNode(const UK2Node& a_Node, EPathDirection a_Direction)
@@ -369,5 +449,27 @@ void SuggestionDatabasePath::AddToPredictionDatabase(const PathPredictionEntry& 
 	else
 	{
 		predictions->Push(a_Entry);
+	}
+}
+
+void SuggestionDatabasePath::ToggleSuggestionFlag(const TArray<FString>& a_Args)
+{
+	if (a_Args.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Need at least one argument to toggle suggestion flags"));
+	}
+	else
+	{
+		const FString& flagString = a_Args[0];
+		ESuggestionFlags::Flags flagToToggle; 
+		if (StringToSuggestionFlag(flagString, flagToToggle))
+		{
+			m_SuggestionFlags ^= flagToToggle;
+			UE_LOG(BILog, BI_VERBOSE, TEXT("Toggled flag '%s' (0x%x). New Flags: 0x%x"), *flagString, (int32)flagToToggle, m_SuggestionFlags);
+		}
+		else
+		{
+			UE_LOG(BILog, BI_VERBOSE, TEXT("Could not toggle flag. Invalid flag specified %s"), *flagString);
+		}
 	}
 }
