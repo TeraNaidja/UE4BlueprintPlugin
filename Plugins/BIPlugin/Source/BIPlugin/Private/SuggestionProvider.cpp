@@ -15,6 +15,9 @@ SuggestionProvider::SuggestionProvider(SuggestionDatabaseBase& a_Database, const
 	: m_SuggestionDatabase(a_Database)
 	, m_RebuildDatabaseDelegate(a_RebuildDatabaseDelegate)
 	, m_LastGraphForSuggestions(nullptr)
+	, m_EnabledConsoleCommand(TEXT("BIPlugin_Enabled"), TEXT("Toggles generation of the suggestions"), 
+		FConsoleCommandDelegate::CreateRaw(this, &SuggestionProvider::OnEnabledConsoleCommand))
+	, m_SuggestionsEnabled(true)
 {
 }
 
@@ -33,25 +36,28 @@ void SuggestionProvider::ProvideSuggestions(const FBlueprintSuggestionContext& I
 
 	SubscribeToGraphChanged(InContext.Graphs[0]);
 
-	TArray<Suggestion> suggestions;
-	suggestions.Reserve(NUM_SUGGESTIONS);
-	if (!m_SuggestionDatabase.HasSuggestions())
+	if (m_SuggestionsEnabled)
 	{
-		m_RebuildDatabaseDelegate.Execute();
-	}
+		TArray<Suggestion> suggestions;
+		suggestions.Reserve(NUM_SUGGESTIONS);
+		if (!m_SuggestionDatabase.HasSuggestions())
+		{
+			m_RebuildDatabaseDelegate.Execute();
+		}
 
-	m_SuggestionDatabase.ProvideSuggestions(InContext, NUM_SUGGESTIONS, suggestions);
+		m_SuggestionDatabase.ProvideSuggestions(InContext, NUM_SUGGESTIONS, suggestions);
 
-	int32 suggestionId = 1;
-	for (Suggestion suggested : suggestions)
-	{
-		OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(
-			suggested.GetNodeSignature(), 
-			suggested.GetNodeSignatureGuid(), 
-			suggestionId, 
-			suggested.GetSuggestionContextScore(), 
-			suggested.GetSuggestionUsesScore())));
-		++suggestionId;
+		int32 suggestionId = 1;
+		for (Suggestion suggested : suggestions)
+		{
+			OutEntries.Add(TSharedPtr<FBlueprintSuggestion>(new FBlueprintSuggestion(
+				suggested.GetNodeSignature(),
+				suggested.GetNodeSignatureGuid(),
+				suggestionId,
+				suggested.GetSuggestionContextScore(),
+				suggested.GetSuggestionUsesScore())));
+			++suggestionId;
+		}
 	}
 }
 
@@ -96,4 +102,10 @@ void SuggestionProvider::OnGraphChanged(const FEdGraphEditAction& a_Action)
 
 		m_SuggestionDatabase.GenerateSuggestionForCreatedLink(*nodeA, *nodeB);
 	}
+}
+
+void SuggestionProvider::OnEnabledConsoleCommand()
+{
+	m_SuggestionsEnabled = !m_SuggestionsEnabled;
+	UE_LOG(BILog, Log, TEXT("BIPlugin Suggestion generation is now %s"), m_SuggestionsEnabled ? TEXT("ENABLED") : TEXT("DISABLED"));
 }

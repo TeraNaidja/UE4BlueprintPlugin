@@ -6,6 +6,8 @@
 #include "GraphNodeInformationDatabase.h"
 #include "GraphNodeInformation.h"
 
+#include "StackTimer.h"
+
 namespace
 {
 	EEdGraphPinDirection ToPinDirection(EPathDirection a_PathDirection)
@@ -176,7 +178,7 @@ namespace
 			}
 			else
 			{
-				UE_LOG(BILog, Warning, TEXT("Got no information about suggested node %s in graph %s"), 
+				UE_LOG(BILog, BI_VERBOSE, TEXT("Got no information about suggested node %s in graph %s"), 
 					*(entry.m_PredictionVertex.m_NodeTitle.ToString()), *(a_ContextGraph->GetName()));
 			}
 		}
@@ -287,6 +289,15 @@ void SuggestionDatabasePath::FlushDatabase()
 	m_BackwardPredictionDatabase.Empty();
 }
 
+//#define DETAILED_SUGGESTION_TIMINGS
+#ifdef DETAILED_SUGGESTION_TIMINGS
+#define TIMING_START(name, friendlyName) StackTimer name(#friendlyName);
+#define TIMING_LOG(name) name.LogElapsedMs();
+#else
+#define TIMING_START(name, friendlyName) 
+#define TIMING_LOG(name) 
+#endif
+
 void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContext& a_Context, int32 a_SuggestionCount, TArray<Suggestion>& a_Output)
 {
 	verify(a_Context.Graphs.Num() == 1); //We assume that we are only dealing with a single graph.
@@ -315,14 +326,28 @@ void SuggestionDatabasePath::ProvideSuggestions(const FBlueprintSuggestionContex
 
 	PredictionDatabase db = (direction == EPathDirection::Forward) ? m_ForwardPredictionDatabase : m_BackwardPredictionDatabase;
 
+	TIMING_START(suggestionTimer, "FindSuggestionPaths");
 	const TArray<PathPredictionEntry>* suggestionPaths = db.Find(nodeIndex);
+	TIMING_LOG(suggestionTimer);
+
 	if (suggestionPaths != nullptr)
-	{ 
+	{
+		TIMING_START(compatibilityTimer, "RemoveIncompatibleSuggestions");
 		TArray<PathPredictionEntry> compatibleEntries = RemoveIncompatibleSuggestionsBasedOnConnectablePinTypes(
 			*suggestionPaths, *a_Context.Pins[0].Pin, GetGraphNodeDatabase(), a_Context.Graphs[0]);
+		TIMING_LOG(compatibilityTimer);
+
+		TIMING_START(filterTimer, "FilterSuggestions");
 		FilterSuggestionsUsingContextPaths(compatibleEntries, availableContextPaths, a_Output, m_SuggestionFlags);
+		TIMING_LOG(filterTimer);
+
+		TIMING_START(combineTimer, "CombineSuggestions");
 		CombineSuggestions(a_Output);
+		TIMING_LOG(combineTimer);
+
+		TIMING_START(selectTopTimer, "SelectTopN");
 		SelectTopNSuggestions(a_Output, a_SuggestionCount, m_SuggestionFlags);
+		TIMING_LOG(selectTopTimer);
 	}
 
 	UE_LOG(BILog, BI_VERBOSE, TEXT("Got %i suggestions (%.2f ms): "), a_Output.Num(), FPlatformTime::ToMilliseconds(FPlatformTime::Cycles() - startTime));
@@ -361,14 +386,12 @@ void SuggestionDatabasePath::Serialize(FArchive& a_Archive)
 	}
 }
 
-SuggestionDatabaseBase::CrossValidateResult SuggestionDatabasePath::CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node)
+SuggestionDatabaseBase::CrossValidateResult SuggestionDatabasePath::CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node, int32 a_NumSuggestionsToUse)
 {
-	const int32 NUM_SUGGESTIONS = 5;
-
 	CrossValidateResult result;
 
 	TArray<Suggestion> suggestResult;
-	suggestResult.Reserve(NUM_SUGGESTIONS);
+	suggestResult.Reserve(a_NumSuggestionsToUse);
 	for (UEdGraphPin* pin : a_Node.Pins)
 	{
 		if (pin->LinkedTo.Num() > 0)
@@ -383,19 +406,28 @@ SuggestionDatabaseBase::CrossValidateResult SuggestionDatabasePath::CrossValidat
 			context.Pins.Push(pinInfo);
 
 			const uint32 startCycles = FPlatformTime::Cycles();
-			ProvideSuggestions(context, NUM_SUGGESTIONS, suggestResult);
-			result.m_CyclesTaken += FPlatformTime::Cycles() - startCycles;
+			ProvideSuggestions(context, a_NumSuggestionsToUse, suggestResult);
+			uint32 cyclesTaken = FPlatformTime::Cycles() - startCycles;
+			result.m_CyclesTaken += cyclesTaken;
+			result.m_MaxCyclesTaken = FMath::Max(result.m_MaxCyclesTaken, cyclesTaken);
+			result.m_MinCyclesTaken = FMath::Min(result.m_MinCyclesTaken, cyclesTaken);
 
 			for (UEdGraphPin* otherPin : pin->LinkedTo)
 			{
 				UK2Node* otherNode = GetNodeFromPin(otherPin);
 				FBlueprintNodeSignature otherSignature = otherNode->GetSignature();
 				FGuid otherSignatureGuid = otherSignature.AsGuid();
-				if (suggestResult.ContainsByPredicate([&] (const Suggestion& obj) -> bool {
-					return obj.GetNodeSignatureGuid() == otherSignatureGuid;
-				}))
+				
+				int32 index = 0;
+				for (const Suggestion& suggest : suggestResult)
 				{
-					result.m_PassedPrecision++;
+					if (suggest.GetNodeSignatureGuid() == otherSignatureGuid)
+					{
+						result.m_PassedPrecision++;
+						result.m_PassedPrecisionEntryRank[index]++;
+						break;
+					}
+					index++;
 				}
 			}
 		}
@@ -465,11 +497,11 @@ void SuggestionDatabasePath::ToggleSuggestionFlag(const TArray<FString>& a_Args)
 		if (StringToSuggestionFlag(flagString, flagToToggle))
 		{
 			m_SuggestionFlags ^= flagToToggle;
-			UE_LOG(BILog, BI_VERBOSE, TEXT("Toggled flag '%s' (0x%x). New Flags: 0x%x"), *flagString, (int32)flagToToggle, m_SuggestionFlags);
+			UE_LOG(BILog, Log, TEXT("Toggled flag '%s' (0x%x). New Flags: 0x%x"), *flagString, (int32)flagToToggle, m_SuggestionFlags);
 		}
 		else
 		{
-			UE_LOG(BILog, BI_VERBOSE, TEXT("Could not toggle flag. Invalid flag specified %s"), *flagString);
+			UE_LOG(BILog, Warning, TEXT("Could not toggle flag. Invalid flag specified %s"), *flagString);
 		}
 	}
 }

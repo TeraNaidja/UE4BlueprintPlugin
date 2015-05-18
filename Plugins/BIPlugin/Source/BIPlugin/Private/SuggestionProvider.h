@@ -15,10 +15,13 @@ public:
 private:
 	void SubscribeToGraphChanged(UEdGraph* a_Graph);
 	void OnGraphChanged(const FEdGraphEditAction& a_Action);
+	void OnEnabledConsoleCommand();
 
 	SuggestionDatabaseBase& m_SuggestionDatabase;
 	RebuildDatabaseDelegate m_RebuildDatabaseDelegate;
 
 	UEdGraph* m_LastGraphForSuggestions;
 	FDelegateHandle m_OnGraphChangedHandle;
+	FAutoConsoleCommand m_EnabledConsoleCommand;
+	bool m_SuggestionsEnabled;
 };

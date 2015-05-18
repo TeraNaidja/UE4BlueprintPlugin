@@ -15,6 +15,19 @@ namespace
 		UK2Node* m_Node;
 	};
 
+	void ShuffleNodeArray(TArray<FoldNodeEntry>& a_List)
+	{
+		struct RandomizeSort
+		{
+			inline bool operator () (const FoldNodeEntry& lhs, const FoldNodeEntry& rhs) const
+			{
+				return FMath::Rand() < (RAND_MAX / 2);
+			}
+		};
+
+		a_List.Sort(RandomizeSort());
+	}
+
 	TArray<TArray<FoldNodeEntry>> SplitAvailableNodesInKFolds(int32 a_NumFolds)
 	{
 		TArray<FoldNodeEntry> availableNodes;
@@ -34,7 +47,10 @@ namespace
 			}
 		}
 
-		UE_LOG(BILog, BI_VERBOSE, TEXT("Splitting up %i nodes in %i folds"), availableNodes.Num(), a_NumFolds);
+		FMath::RandInit(75623457);
+		ShuffleNodeArray(availableNodes);
+
+		UE_LOG(BILog, Log, TEXT("Splitting up %i nodes in %i folds"), availableNodes.Num(), a_NumFolds);
 
 		TArray<TArray<FoldNodeEntry>> result;
 		int32 numNodesPerFold = FMath::CeilToInt(static_cast<float>(availableNodes.Num()) / static_cast<float>(a_NumFolds));
@@ -53,6 +69,23 @@ namespace
 			result.Push(foldList);
 		}
 		return result;
+	}
+
+	void LogValidationResult(const SuggestionDatabaseBase::CrossValidateResult& a_Result)
+	{
+		UE_LOG(BILog, Warning, TEXT("Performed %i tests, %i passed precision (%f%), Took %.2f ms (Min: %.2f ms Max: %.2f ms), Rank Percentages: (%.2f %.2f %.2f %.2f %.2f)"),
+			a_Result.m_TestsPerformed,
+			a_Result.m_PassedPrecision,
+			static_cast<float>(a_Result.m_PassedPrecision) / static_cast<float>(a_Result.m_TestsPerformed),
+			FPlatformTime::ToMilliseconds(a_Result.m_CyclesTaken),
+			FPlatformTime::ToMilliseconds(a_Result.m_MinCyclesTaken),
+			FPlatformTime::ToMilliseconds(a_Result.m_MaxCyclesTaken),
+			static_cast<float>(a_Result.m_PassedPrecisionEntryRank[0]) / static_cast<float>(a_Result.m_PassedPrecision),
+			static_cast<float>(a_Result.m_PassedPrecisionEntryRank[1]) / static_cast<float>(a_Result.m_PassedPrecision),
+			static_cast<float>(a_Result.m_PassedPrecisionEntryRank[2]) / static_cast<float>(a_Result.m_PassedPrecision),
+			static_cast<float>(a_Result.m_PassedPrecisionEntryRank[3]) / static_cast<float>(a_Result.m_PassedPrecision),
+			static_cast<float>(a_Result.m_PassedPrecisionEntryRank[4]) / static_cast<float>(a_Result.m_PassedPrecision)
+			);
 	}
 }
 
@@ -76,14 +109,13 @@ void SuggestionDatabaseBase::FillSuggestionDatabase()
 
 void SuggestionDatabaseBase::PerformKFoldCrossValidationTest(int32 a_Folds)
 {
-	const float TEST_NODE_RATIO = 1.0f / 3.0f;
-
 	UE_LOG(BILog, BI_VERBOSE, TEXT("Performing %i fold cross validation"), a_Folds);
 	TArray<TArray<FoldNodeEntry>> folds = SplitAvailableNodesInKFolds(a_Folds);
 
 	const uint32 startCycles = FPlatformTime::Cycles();
 
-	CrossValidateResult mergedResults;
+	CrossValidateResult* mergedResultPerFold = new CrossValidateResult[a_Folds];
+	CrossValidateResult mergedAllResults;
 
 	for (int32 validationPass = 0; validationPass < a_Folds; ++validationPass)
 	{
@@ -107,22 +139,44 @@ void SuggestionDatabaseBase::PerformKFoldCrossValidationTest(int32 a_Folds)
 		//Test training data.
 		for (FoldNodeEntry testNode : testFold)
 		{
-			CrossValidateResult result = CrossValidateTest(*(testNode.m_Graph), *(testNode.m_Node));
-			mergedResults.m_TestsPerformed += result.m_TestsPerformed;
-			mergedResults.m_PassedPrecision += result.m_PassedPrecision;
-			mergedResults.m_CyclesTaken += result.m_CyclesTaken;
+			CrossValidateResult result = CrossValidateTest(*(testNode.m_Graph), *(testNode.m_Node), KFOLD_NUM_SUGGESTIONS);
+			mergedResultPerFold[validationPass].m_TestsPerformed += result.m_TestsPerformed;
+			mergedResultPerFold[validationPass].m_PassedPrecision += result.m_PassedPrecision;
+			mergedResultPerFold[validationPass].m_CyclesTaken += result.m_CyclesTaken;
+			mergedResultPerFold[validationPass].m_MaxCyclesTaken = FMath::Max(mergedResultPerFold[validationPass].
+				m_MaxCyclesTaken, result.m_MaxCyclesTaken);
+			mergedResultPerFold[validationPass].m_MinCyclesTaken = FMath::Min(mergedResultPerFold[validationPass].
+				m_MinCyclesTaken, result.m_MinCyclesTaken);
+			for (int32 i = 0; i < KFOLD_NUM_SUGGESTIONS; ++i)
+			{
+				mergedResultPerFold[validationPass].m_PassedPrecisionEntryRank[i] += result.m_PassedPrecisionEntryRank[i];
+			}
+		}
+
+		mergedAllResults.m_TestsPerformed+= mergedResultPerFold[validationPass].m_TestsPerformed;
+		mergedAllResults.m_PassedPrecision += mergedResultPerFold[validationPass].m_PassedPrecision;
+		mergedAllResults.m_CyclesTaken += mergedResultPerFold[validationPass].m_CyclesTaken;
+		mergedAllResults.m_MaxCyclesTaken = FMath::Max(mergedAllResults.m_MaxCyclesTaken, 
+			mergedResultPerFold[validationPass].m_MaxCyclesTaken);
+		mergedAllResults.m_MinCyclesTaken = FMath::Min(mergedAllResults.m_MinCyclesTaken, 
+			mergedResultPerFold[validationPass].m_MinCyclesTaken);
+		for (int32 i = 0; i < KFOLD_NUM_SUGGESTIONS; ++i)
+		{
+			mergedAllResults.m_PassedPrecisionEntryRank[i] += mergedResultPerFold[validationPass].m_PassedPrecisionEntryRank[i];
 		}
 	}
-
 	const uint32 endCycles = FPlatformTime::Cycles();
 
-	UE_LOG(BILog, Warning, TEXT("Performed %i tests, %i passed precision (%f%)"), mergedResults.m_TestsPerformed, 
-		mergedResults.m_PassedPrecision, static_cast<float>(mergedResults.m_PassedPrecision) / 
-		static_cast<float>(mergedResults.m_TestsPerformed));
-	const float timeSpentForSuggestions = FPlatformTime::ToMilliseconds(mergedResults.m_CyclesTaken);
+	LogValidationResult(mergedAllResults);
+	for (int i = 0; i < a_Folds; ++i)
+	{
+		LogValidationResult(mergedResultPerFold[i]);
+	}
+
+	const float timeSpentForSuggestions = FPlatformTime::ToMilliseconds(mergedAllResults.m_CyclesTaken);
 	UE_LOG(BILog, Warning, TEXT("Took %.2f ms of which %.2f on generating suggestions (avg %.2f ms per query)"), 
 		FPlatformTime::ToMilliseconds(endCycles - startCycles), timeSpentForSuggestions, timeSpentForSuggestions / 
-		static_cast<float>(mergedResults.m_TestsPerformed));
+		static_cast<float>(mergedAllResults.m_TestsPerformed));
 }
 
 void SuggestionDatabaseBase::SetGraphNodeDatabase(GraphNodeInformationDatabase* a_Database)

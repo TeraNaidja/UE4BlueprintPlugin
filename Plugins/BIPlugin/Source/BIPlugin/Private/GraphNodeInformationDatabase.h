@@ -15,4 +15,5 @@ public:
 
 private:
 	TMap<FGuid, GraphNodeInformation> m_GraphNodeInformation;
+	bool m_HasBuiltDatabase;
 };

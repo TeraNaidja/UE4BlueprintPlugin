@@ -35,6 +35,7 @@ namespace
 }
 
 GraphNodeInformationDatabase::GraphNodeInformationDatabase()
+	: m_HasBuiltDatabase(false)
 {
 }
 
@@ -63,25 +64,29 @@ void GraphNodeInformationDatabase::FillDatabase()
 			}
 		}
 	}
+	m_HasBuiltDatabase = true;
 }
 
 void GraphNodeInformationDatabase::FlushDatabase()
 {
 	m_GraphNodeInformation.Empty();
+	m_HasBuiltDatabase = false;
 }
 
 const GraphNodeInformation* GraphNodeInformationDatabase::FindNodeInformation(const FGuid& a_NodeSignatureGuid, UEdGraph* a_TargetGraph)
 {
 	const GraphNodeInformation* info = m_GraphNodeInformation.Find(a_NodeSignatureGuid);
 
-	if (info == nullptr)
+	if (info == nullptr && !m_HasBuiltDatabase)
 	{
-		UK2Node* templateNode = FindTemplateNodeForNodeGuid(a_NodeSignatureGuid, a_TargetGraph);
+		FillDatabase();
+		info = m_GraphNodeInformation.Find(a_NodeSignatureGuid);
+		/*UK2Node* templateNode = FindTemplateNodeForNodeGuid(a_NodeSignatureGuid, a_TargetGraph);
 		if (templateNode != nullptr)
 		{
 			GraphNodeInformation nodeInfo(*templateNode);
 			info = &(m_GraphNodeInformation.Add(a_NodeSignatureGuid, nodeInfo));
-		}
+		}*/
 	}
 
 	return info;

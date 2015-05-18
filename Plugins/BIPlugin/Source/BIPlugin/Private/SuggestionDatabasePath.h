@@ -46,7 +46,7 @@ public:
 	virtual void GenerateSuggestionForCreatedLink(const UK2Node& a_NodeA, const UK2Node& a_NodeB) override;
 	virtual void Serialize(FArchive& a_Archive) override;
 
-	virtual CrossValidateResult CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node) override;
+	virtual CrossValidateResult CrossValidateTest(UEdGraph& a_Graph, const UK2Node& a_Node, int32 a_NumSuggestionsToUse) override;
 
 protected:
 	virtual void ParseNode(const UK2Node& a_Node, EPathDirection a_Direction) override;

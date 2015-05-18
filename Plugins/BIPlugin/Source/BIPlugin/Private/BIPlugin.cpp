@@ -82,10 +82,17 @@ void BIPluginImpl::LoadDatabaseFromFile(const TCHAR* a_FilePath)
 	UE_LOG(BILog, Log, TEXT("Deserializing BI Plugin database from '%s'"), a_FilePath);
 	FArchive* fileArchive = IFileManager::Get().CreateFileReader(a_FilePath);
 
-	m_SuggestionDatabase->Serialize(*fileArchive);
+	if (fileArchive != nullptr)
+	{
+		m_SuggestionDatabase->Serialize(*fileArchive);
 
-	fileArchive->Close();
-	delete fileArchive;
+		fileArchive->Close();
+		delete fileArchive;
+	}
+	else
+	{
+		UE_LOG(BILog, Log, TEXT("Could not find BI Plugin database at '%s'"), a_FilePath);
+	}
 }
 
 void BIPluginImpl::OnPerformKFoldCrossValidation(const TArray<FString>& a_Arguments)
