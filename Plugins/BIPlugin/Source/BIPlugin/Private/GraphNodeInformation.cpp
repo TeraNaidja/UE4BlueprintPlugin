@@ -46,7 +46,7 @@ bool GraphNodeInformation::HasPinTypeInDirection(const FEdGraphPinType& a_PinTyp
 {
 	const TArray<FEdGraphPinType>& pinData = GetPinArrayForDirection(a_Direction);
 	return pinData.ContainsByPredicate([&](const FEdGraphPinType& obj) -> bool {
-		return obj.PinCategory == a_PinType.PinCategory;
+		return obj.PinCategory == a_PinType.PinCategory && obj.PinSubCategoryObject == a_PinType.PinSubCategoryObject;
 	});
 }
 
