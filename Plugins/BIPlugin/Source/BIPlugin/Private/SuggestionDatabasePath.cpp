@@ -141,8 +141,6 @@ namespace
 			}); 
 			if (containedSuggestion != nullptr)
 			{
-				//Combine scores or pick max? For now we will just go with the max approach. This might be an interesting field of research right here. 
-				// Do we select nodes based on max context similarity or just on max uses? 
 				containedSuggestion->SetSuggestionContextScore(FMath::Max(suggested.GetSuggestionContextScore(), 
 					containedSuggestion->GetSuggestionContextScore()));
 				containedSuggestion->SetSuggestionUsesScore(containedSuggestion->GetSuggestionUsesScore() + 
@@ -273,7 +271,8 @@ FArchive& operator << (FArchive& a_Archive, SuggestionDatabasePath::NodeIndexTyp
 
 SuggestionDatabasePath::SuggestionDatabasePath()
 	: m_SuggestionFlags(ESuggestionFlags::CalculateContext)
-	, m_ToggleFlagCommand(TEXT("BIPlugin_ToggleSelectionFlag"), TEXT("Hue^3"), 
+	, m_ToggleFlagCommand(TEXT("BIPlugin_ToggleSelectionFlag"), TEXT("Toggles selection state of certain flags. \
+		Available flags are: 'SortUsesOverContext' and 'CalculateContext'"),
 	FConsoleCommandWithArgsDelegate::CreateRaw(this, &SuggestionDatabasePath::ToggleSuggestionFlag))
 {
 }

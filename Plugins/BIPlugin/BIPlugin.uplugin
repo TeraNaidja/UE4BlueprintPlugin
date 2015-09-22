@@ -5,10 +5,10 @@
     "Version" : 1,
     "VersionName": "0.1",
     "EngineVersion" : "4.7+",
-    "Description" : "Here I describe the capabilities of the plugin.",
-    "Category" : "Bobs.Stand Alone",
-    "CreatedBy" : "Bob Chatman",
-    "CreatedByURL" : "INPUT URL HERE",
+    "Description" : "A plugin providing interactive suggestions within the Blueprint editing environment.",
+    "Category" : "Editor.Productivity",
+    "CreatedBy" : "Phil de Groot",
+    "CreatedByURL" : "http://phildegroot.com/",
  
     "Modules" :
     [
